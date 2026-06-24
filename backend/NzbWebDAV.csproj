@@ -19,8 +19,13 @@
       <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
       <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
       <PackageReference Include="SharpCompress" Version="0.39.0" />
-      <PackageReference Include="UsenetSharp" Version="1.0.6" />
       <PackageReference Include="ZstdSharp.Port" Version="0.8.7" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <!-- Build against the Dadarrs/UsenetSharp submodule (external/UsenetSharp), which carries the
+           pipelined-STAT API, instead of the published UsenetSharp NuGet package. -->
+      <ProjectReference Include="..\external\UsenetSharp\UsenetSharp\UsenetSharp.csproj" />
     </ItemGroup>
 
     <ItemGroup>

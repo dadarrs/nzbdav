@@ -1,0 +1,3 @@
+[submodule "external/UsenetSharp"]
+	path = external/UsenetSharp
+	url = https://github.com/Dadarrs/UsenetSharp.git
