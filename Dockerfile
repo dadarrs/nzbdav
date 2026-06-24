@@ -16,6 +16,9 @@ FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS backe
 
 WORKDIR /backend
 COPY ./backend ./
+# UsenetSharp is consumed via a git submodule + ProjectReference (../external/UsenetSharp),
+# so the build context must include it too. Mirrors the on-disk layout: /backend + /external.
+COPY ./external /external
 
 # Accept build-time architecture as ARG (e.g., x64 or arm64)
 ARG TARGETARCH
