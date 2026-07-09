@@ -1,10 +1,15 @@
 ﻿using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using NWebDav.Server.Stores;
+using NzbWebDAV.Clients.Usenet;
 using NzbWebDAV.Config;
+using NzbWebDAV.Database.Models;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Par2Recovery;
+using NzbWebDAV.Services;
+using NzbWebDAV.Streams;
 using NzbWebDAV.Utils;
 using NzbWebDAV.WebDav;
 
@@ -70,7 +75,41 @@ public class GetWebdavItemController(DatabaseStore store, ConfigManager configMa
             HttpContext.Items["configManager"] = configManager;
             var request = new GetWebdavItemRequest(HttpContext);
             await using var response = await GetWebdavItem(request);
-            await response.CopyToAsync(Response.Body, bufferSize: 1024, HttpContext.RequestAborted);
+
+            // Mirror the WebDAV GET handler's instrumentation: this endpoint serves the in-app
+            // player and strm links, and its reads should show up in the active-streams widget,
+            // the live-reads panel and the stream history just like rclone/webdav reads do.
+            var streamInfo = HttpContext.Items.TryGetValue("ActiveStreamInfo", out var si)
+                ? si as ActiveStreamInfo
+                : null;
+            ActiveReadRegistry? readRegistry = null;
+            Guid? readSessionId = null;
+            if (HttpContext.Items["DavItem"] is DavItem davItem)
+            {
+                readRegistry = HttpContext.RequestServices.GetService<ActiveReadRegistry>();
+                if (readRegistry != null)
+                {
+                    var clientKey = $"{HttpContext.Connection.RemoteIpAddress}|{Request.Headers.UserAgent}";
+                    readSessionId = readRegistry.GetOrCreate(davItem.Path, clientKey, davItem.Name, davItem.FileSize);
+                }
+            }
+
+            using var readScope = readSessionId != null
+                ? MultiProviderNntpClient.BeginReadSessionScope(readSessionId.Value)
+                : null;
+            var buffer = new byte[64 * 1024];
+            while (true)
+            {
+                var bytesRead = await response
+                    .ReadAsync(buffer, 0, buffer.Length, HttpContext.RequestAborted)
+                    .ConfigureAwait(false);
+                if (bytesRead == 0) break;
+                await Response.Body.WriteAsync(buffer, 0, bytesRead, HttpContext.RequestAborted)
+                    .ConfigureAwait(false);
+                streamInfo?.AddBytes(bytesRead);
+                if (readRegistry != null && readSessionId != null)
+                    readRegistry.Touch(readSessionId.Value, bytesRead);
+            }
         }
         catch (UnauthorizedAccessException)
         {
