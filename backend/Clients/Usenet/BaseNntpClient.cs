@@ -60,6 +60,18 @@ public class BaseNntpClient : NntpClient
         return _client.StatAsync(segmentId, cancellationToken);
     }
 
+    // GROUP and STAT-by-number are only needed on a raw single connection (the provider
+    // pipelining-support test), so they live here rather than on INntpClient.
+    public Task<UsenetGroupResponse> GroupAsync(string group, CancellationToken cancellationToken)
+    {
+        return _client.GroupAsync(group, cancellationToken);
+    }
+
+    public Task<UsenetStatResponse> StatByNumberAsync(long articleNumber, CancellationToken cancellationToken)
+    {
+        return _client.StatByNumberAsync(articleNumber, cancellationToken);
+    }
+
     public override Task<IReadOnlyList<UsenetStatResponse>> StatPipelinedAsync
     (
         IReadOnlyList<string> segmentIds,
