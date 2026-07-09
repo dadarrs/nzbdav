@@ -172,6 +172,19 @@ public class ConfigManager
     }
 
     /// <summary>
+    /// When enabled, backup providers that have STAT pipelining enabled also carry article
+    /// health-check traffic alongside the pooled providers. STAT checks transfer no article
+    /// bytes; on byte-metered blocks the protocol traffic still counts, at roughly 0.7MB of
+    /// quota per 10GB of content checked (measured ~45 bytes per STAT).
+    /// </summary>
+    public bool UseBackupProvidersForHealthChecks()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("api.backup-providers-for-health-checks"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    /// <summary>
     /// Master switch for NNTP STAT pipelining. When disabled, STAT health checks always run
     /// one-command-per-round-trip regardless of any provider's individual pipelining setting.
     /// </summary>

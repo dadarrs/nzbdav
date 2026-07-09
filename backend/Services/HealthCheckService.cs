@@ -56,8 +56,11 @@ public class HealthCheckService : BackgroundService
                     continue;
                 }
 
-                // get concurrency
-                var concurrency = _configManager.GetUsenetProviderConfig().TotalPooledConnections;
+                // get concurrency -- STAT checks may fan out beyond the pooled providers:
+                // opted-in backup providers carry them too (STAT transfers no article
+                // bytes, so block accounts spend almost nothing).
+                var concurrency = _configManager.GetUsenetProviderConfig()
+                    .TotalStatCheckConnections(_configManager.UseBackupProvidersForHealthChecks());
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
 
                 // get the davItem to health-check

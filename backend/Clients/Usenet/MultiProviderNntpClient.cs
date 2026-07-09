@@ -7,7 +7,10 @@ using UsenetSharp.Models;
 
 namespace NzbWebDAV.Clients.Usenet;
 
-public class MultiProviderNntpClient(List<MultiConnectionNntpClient> providers) : NntpClient
+public class MultiProviderNntpClient(
+    List<MultiConnectionNntpClient> providers,
+    Func<bool>? useBackupProvidersForStatChecks = null
+) : NntpClient
 {
     public override Task ConnectAsync(string host, int port, bool useSsl, CancellationToken ct)
     {
@@ -40,7 +43,7 @@ public class MultiProviderNntpClient(List<MultiConnectionNntpClient> providers) 
         for (var i = 0; i < segmentIds.Count; i++) pending.Add(i);
 
         ExceptionDispatchInfo? lastException = null;
-        var orderedProviders = GetOrderedProviders();
+        var orderedProviders = GetOrderedProvidersForStatCheck();
         foreach (var provider in orderedProviders)
         {
             if (pending.Count == 0) break;
@@ -233,6 +236,31 @@ public class MultiProviderNntpClient(List<MultiConnectionNntpClient> providers) 
         var enabled = providers
             .Where(x => x.ProviderType != ProviderType.Disabled)
             .OrderBy(x => x.ProviderType)
+            .ThenByDescending(x => x.AvailableConnections)
+            .ToList();
+
+        var healthy = enabled.Where(x => !x.IsTripped).ToList();
+
+        // Always return at least one provider so cooldown probes can fire.
+        return healthy.Count > 0 ? healthy : enabled;
+    }
+
+    /// <summary>
+    /// Provider order for STAT health-check batches. Unlike downloads, STAT transfers no article
+    /// bytes, so backup/block accounts can absorb existence checks nearly for free (protocol
+    /// traffic may still be metered).
+    /// When the "use backup providers for health checks" setting is on, every pooled provider
+    /// plus any backup provider that opted in (STAT pipelining enabled) is first-class here,
+    /// ordered purely by free capacity so concurrent batches spread across all of them.
+    /// Non-eligible providers still follow, but only ever see the still-missing re-query.
+    /// </summary>
+    private List<MultiConnectionNntpClient> GetOrderedProvidersForStatCheck()
+    {
+        var useBackupProviders = useBackupProvidersForStatChecks?.Invoke() ?? false;
+        var enabled = providers
+            .Where(x => x.ProviderType != ProviderType.Disabled)
+            .OrderByDescending(x => x.ProviderType == ProviderType.Pooled
+                                    || (useBackupProviders && x.StatPipeliningEnabled))
             .ThenByDescending(x => x.AvailableConnections)
             .ToList();
 

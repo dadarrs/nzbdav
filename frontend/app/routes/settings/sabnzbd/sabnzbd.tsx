@@ -249,6 +249,24 @@ export function SabnzbdSettings({ config, setNewConfig, appVersion }: SabnzbdSet
                 <Form.Check
                     className={styles.input}
                     type="checkbox"
+                    id="backup-providers-for-health-checks-checkbox"
+                    aria-describedby="backup-providers-for-health-checks-help"
+                    label={`Use Backup Providers for health checks`}
+                    checked={config["api.backup-providers-for-health-checks"] === "true"}
+                    onChange={e => setNewConfig({ ...config, "api.backup-providers-for-health-checks": "" + e.target.checked })} />
+                <Form.Text id="backup-providers-for-health-checks-help" muted>
+                    Lets backup providers carry article health checks alongside pooled providers,
+                    speeding up checks. Only backup providers with STAT pipelining enabled on the
+                    Usenet tab participate. STAT checks download no article data, but note that
+                    the protocol traffic can still count toward block quotas: roughly 0.7&nbsp;MB
+                    per 10&nbsp;GB of content checked.
+                </Form.Text>
+            </Form.Group>
+            <hr />
+            <Form.Group>
+                <Form.Check
+                    className={styles.input}
+                    type="checkbox"
                     id="ignore-history-limit-checkbox"
                     aria-describedby="ignore-history-limit-help"
                     label={`Always send full History to Radarr/Sonarr`}
@@ -363,6 +381,7 @@ export function isSabnzbdSettingsUpdated(config: Record<string, string>, newConf
         || config["api.nzb-backup-location"] !== newConfig["api.nzb-backup-location"]
         || config["usenet.nntp-pipelining.enabled"] !== newConfig["usenet.nntp-pipelining.enabled"]
         || config["usenet.nntp-pipelining.depth"] !== newConfig["usenet.nntp-pipelining.depth"]
+        || config["api.backup-providers-for-health-checks"] !== newConfig["api.backup-providers-for-health-checks"]
 }
 
 export function isSabnzbdSettingsValid(newConfig: Record<string, string>) {

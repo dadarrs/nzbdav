@@ -32,6 +32,7 @@ public class MultiConnectionNntpClient(
 ) : NntpClient
 {
     public ProviderType ProviderType { get; } = type;
+    public bool StatPipeliningEnabled { get; } = statPipeliningEnabled;
     public bool IsTripped => circuitBreaker.IsTripped;
     public int LiveConnections => connectionPool.LiveConnections;
     public int IdleConnections => connectionPool.IdleConnections;
@@ -100,7 +101,7 @@ public class MultiConnectionNntpClient(
             try
             {
                 IReadOnlyList<UsenetStatResponse> results;
-                if (statPipeliningEnabled)
+                if (StatPipeliningEnabled)
                 {
                     // One round-trip for the whole batch on this single borrowed connection.
                     results = await connectionLock.Connection

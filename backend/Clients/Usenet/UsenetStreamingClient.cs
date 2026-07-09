@@ -1,8 +1,11 @@
-﻿using NzbWebDAV.Clients.Usenet.Connections;
+﻿using System.Diagnostics;
+using NzbWebDAV.Clients.Usenet.Connections;
 using NzbWebDAV.Config;
 using NzbWebDAV.Exceptions;
 using NzbWebDAV.Extensions;
+using NzbWebDAV.Models;
 using NzbWebDAV.Websocket;
+using Serilog;
 using UsenetSharp.Models;
 
 namespace NzbWebDAV.Clients.Usenet;
@@ -43,17 +46,28 @@ public class UsenetStreamingClient : WrappingNntpClient
     )
     {
         // Stay on the original one-at-a-time path unless pipelining is switched on AND at least one
-        // provider has actually opted in -- so enabling the master switch alone changes nothing until
-        // a provider is tested and enabled.
+        // health-check-eligible provider has actually opted in -- so enabling the master switch
+        // alone changes nothing until a provider is tested and enabled.
+        var ids = segmentIds as IReadOnlyCollection<string> ?? segmentIds.ToList();
         var depth = _configManager.GetNntpPipeliningDepth();
+        var useBackupProviders = _configManager.UseBackupProvidersForHealthChecks();
         var anyProviderPipelined = _configManager.GetUsenetProviderConfig()
-            .Providers.Any(p => p.StatPipeliningEnabled);
+            .Providers.Any(p => p.StatPipeliningEnabled && p.IsStatCheckEligible(useBackupProviders));
+        var stopwatch = Stopwatch.StartNew();
         if (!_configManager.GetNntpPipeliningEnabled() || depth <= 1 || !anyProviderPipelined)
         {
-            await base.CheckAllSegmentsAsync(segmentIds, concurrency, progress, cancellationToken)
+            Log.Information(
+                "Article health check: LINEAR STAT path ({Count} segments, concurrency {Concurrency})",
+                ids.Count, concurrency);
+            await base.CheckAllSegmentsAsync(ids, concurrency, progress, cancellationToken)
                 .ConfigureAwait(false);
+            LogCompleted("LINEAR", ids.Count, stopwatch);
             return;
         }
+
+        Log.Information(
+            "Article health check: PIPELINED STAT path ({Count} segments, depth {Depth}, concurrency {Concurrency})",
+            ids.Count, depth, concurrency);
 
         using var childCt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = childCt.Token;
@@ -61,7 +75,7 @@ public class UsenetStreamingClient : WrappingNntpClient
         // Check the segments in pipelined batches of `depth`, running up to `concurrency` batches at
         // once so every pooled connection stays busy. Depth is the user-facing lever: a deeper
         // pipeline hides more round-trip latency; if a provider handles deep batches poorly, lower it.
-        var batches = segmentIds.Chunk(depth);
+        var batches = ids.Chunk(depth);
         var tasks = batches
             .Select(async batch => (
                 Batch: batch,
@@ -80,6 +94,17 @@ public class UsenetStreamingClient : WrappingNntpClient
                 throw new UsenetArticleNotFoundException(task.Batch[i]);
             }
         }
+
+        LogCompleted("PIPELINED", ids.Count, stopwatch);
+    }
+
+    private static void LogCompleted(string path, int count, Stopwatch stopwatch)
+    {
+        var elapsed = stopwatch.Elapsed.TotalSeconds;
+        var rate = elapsed > 0 ? (int)(count / elapsed) : count;
+        Log.Information(
+            "Article health check: {Path} path completed ({Count} segments in {Elapsed:F1}s, {Rate} stat/s)",
+            path, count, elapsed, rate);
     }
 
     private static DownloadingNntpClient CreateDownloadingNntpClient
@@ -106,7 +131,11 @@ public class UsenetStreamingClient : WrappingNntpClient
                 connectionPoolStats.GetOnConnectionPoolChanged(index)
             ))
             .ToList();
-        return new MultiProviderNntpClient(providerClients);
+        // The flag is read through a delegate so toggling the setting takes effect immediately;
+        // the client itself is only rebuilt when the provider list changes.
+        return new MultiProviderNntpClient(
+            providerClients,
+            configManager.UseBackupProvidersForHealthChecks);
     }
 
     private static MultiConnectionNntpClient CreateProviderClient
