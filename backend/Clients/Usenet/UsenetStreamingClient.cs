@@ -124,7 +124,10 @@ public class UsenetStreamingClient : WrappingNntpClient
     )
     {
         var providerConfig = configManager.GetUsenetProviderConfig();
-        var connectionPoolStats = new ConnectionPoolStats(providerConfig, websocketManager);
+        var connectionPoolStats = new ConnectionPoolStats(
+            providerConfig,
+            configManager.UseBackupProvidersForHealthChecks,
+            websocketManager);
         var providerClients = providerConfig.Providers
             .Select((provider, index) => CreateProviderClient(
                 provider,
