@@ -58,8 +58,20 @@ public class MultiSegmentStream : FastReadOnlyNonSeekableStream
 
                 await _streamTasks.Writer.WaitToWriteAsync(cancellationToken);
                 _streamInfo?.IncrementConnections();
-                var connection = await _usenetClient.AcquireExclusiveConnectionAsync(segmentId, cancellationToken);
-                var streamTask = DownloadSegment(segmentId, connection, cancellationToken);
+                Task<Stream> streamTask;
+                try
+                {
+                    var connection = await _usenetClient.AcquireExclusiveConnectionAsync(segmentId, cancellationToken);
+                    streamTask = DownloadSegment(segmentId, connection, cancellationToken);
+                }
+                catch
+                {
+                    // acquire failed/cancelled after the increment: rebalance the counter,
+                    // otherwise aborted reads leave phantom connections on the widget.
+                    _streamInfo?.DecrementConnections();
+                    throw;
+                }
+
                 if (_streamTasks.Writer.TryWrite(streamTask)) continue;
 
                 // if we never get a chance to write the stream to the writer

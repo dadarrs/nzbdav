@@ -20,6 +20,16 @@ const forwardToBackend = createProxyMiddleware({
   target: process.env.BACKEND_URL,
   changeOrigin: true,
   on: {
+    proxyReq: (proxyReq, req, res) => {
+      // Propagate client aborts to the backend. Without this, closing a video
+      // player mid-stream leaves the backend serving the rest of a multi-GB
+      // range request to a dead socket at full provider bandwidth.
+      res.on('close', () => {
+        if (!res.writableEnded) {
+          proxyReq.destroy();
+        }
+      });
+    },
     proxyRes: (proxyRes, req, res) => {
       proxyRes.on('close', () => {
         if (!res.writableEnded) {
