@@ -11,6 +11,7 @@ using NzbWebDAV.Clients.Usenet;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Extensions;
+using NzbWebDAV.Logging;
 using NzbWebDAV.Middlewares;
 using NzbWebDAV.Queue;
 using NzbWebDAV.Services;
@@ -39,6 +40,8 @@ class Program
         var defaultLevel = LogEventLevel.Information;
         var envLevel = EnvironmentUtil.GetEnvironmentVariable("LOG_LEVEL");
         var level = Enum.TryParse<LogEventLevel>(envLevel, true, out var parsed) ? parsed : defaultLevel;
+        var bufferSize = (int)Math.Clamp(EnvironmentUtil.GetLongVariable("LOG_BUFFER_SIZE") ?? 2000, 100, 50000);
+        var logBufferSink = new LogBufferSink(bufferSize);
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Is(level)
             .MinimumLevel.Override("NWebDAV", LogEventLevel.Warning)
@@ -48,6 +51,7 @@ class Program
             .MinimumLevel.Override("Microsoft.AspNetCore.Routing", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.AspNetCore.DataProtection", LogEventLevel.Error)
             .WriteTo.Console(theme: AnsiConsoleTheme.Code)
+            .WriteTo.Sink(logBufferSink)
             .CreateLogger();
 
         // Block upgrades to version 0.6.x
@@ -89,6 +93,8 @@ class Program
             .AddWebdavBasicAuthentication(configManager)
             .AddSingleton(configManager)
             .AddSingleton(websocketManager)
+            .AddSingleton(logBufferSink)
+            .AddHostedService<LogBroadcaster>()
             .AddSingleton<UsenetStreamingClient>()
             .AddSingleton<QueueManager>()
             .AddHostedService<HealthCheckService>()

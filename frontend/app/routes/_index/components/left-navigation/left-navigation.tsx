@@ -24,6 +24,10 @@ export function LeftNavigation({ version, isFrontendAuthDisabled }: LeftNavigati
                 <div className={styles["health-icon"]} />
                 <div className={styles.title}>Health</div>
             </Item>
+            <Item target="/logs">
+                <div className={styles["logs-icon"]} />
+                <div className={styles.title}>Logs</div>
+            </Item>
             <Item target="/settings">
                 <div className={styles["settings-icon"]} />
                 <div className={styles.title}>Settings</div>
