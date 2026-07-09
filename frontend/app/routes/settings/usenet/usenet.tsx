@@ -558,6 +558,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
                             >
                                 <option value={ProviderType.Disabled}>Disabled</option>
                                 <option value={ProviderType.Pooled}>Pool Connections</option>
+                                <option value={ProviderType.BackupAndStats}>Backup &amp; Health Checks</option>
                                 <option value={ProviderType.BackupOnly}>Backup Only</option>
                             </select>
                         </div>
