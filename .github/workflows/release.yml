@@ -1,11 +1,10 @@
 name: "Deploy Versioned Release"
 
+# Versioned releases are cut manually. On this fork, :latest tracks every push to
+# main (see pre-release.yml) instead of release-please releases -- which would also
+# need "Allow GitHub Actions to create and approve pull requests" enabled to work.
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - ".github/**"
+  workflow_dispatch:
 
 jobs:
   release:

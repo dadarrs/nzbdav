@@ -43,6 +43,7 @@ jobs:
           {
             echo "TAGS<<EOF"
             echo "${GHCR_REPO}:pre-release"
+            echo "${GHCR_REPO}:latest"
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
