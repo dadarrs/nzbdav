@@ -308,3 +308,12 @@
         padding: var(--container-padding) var(--container-padding);
     }
 }
+.disabledNotice {
+    margin: 0 0 12px 0;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: hsl(45, 60%, 70%);
+    background: hsla(45, 60%, 50%, 0.08);
+    border: 1px solid hsla(45, 60%, 50%, 0.25);
+}

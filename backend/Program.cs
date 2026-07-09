@@ -151,6 +151,12 @@ class Program
 
         // run
         var app = builder.Build();
+
+        // The tracker is otherwise resolved lazily on the first stream, so its 1s broadcast
+        // timer wouldn't exist until then and the sidebar widget would sit on "Loading..."
+        // after a fresh boot. Instantiate it eagerly so empty states broadcast immediately.
+        _ = app.Services.GetRequiredService<ActiveStreamTracker>();
+
         app.UseMiddleware<ExceptionMiddleware>();
         app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
         app.MapHealthChecks("/health");

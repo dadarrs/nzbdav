@@ -54,15 +54,13 @@ export function HealthTable({
                 </div>
             </div>
 
-            {!isEnabled ? (
-                <div className={styles.emptyState}>
-                    <div className={styles.emptyIcon}>🩺💙💪</div>
-                    <div className={styles.emptyTitle}>Enable Repairs In Settings</div>
-                    <div className={styles.emptyDescription}>
-                        Once you enable repairs, all mounted usenet files will be queued for continuous health monitoring
-                    </div>
+            {!isEnabled && (
+                <div className={styles.disabledNotice}>
+                    🩺 Repairs are disabled — the schedule below is browsable, but nothing will be
+                    checked (including manual "check now") until you enable repairs in Settings.
                 </div>
-            ) : (
+            )}
+            {(
                 <>
                     <div className={styles.toolbar}>
                         <input
