@@ -12,6 +12,8 @@ public class WebsocketTopic
     public static readonly WebsocketTopic HealthItemStatus = new("hs", TopicType.State);
     public static readonly WebsocketTopic HealthItemProgress = new("hp", TopicType.State);
     public static readonly WebsocketTopic ActiveStreams = new("as", TopicType.State);
+    public static readonly WebsocketTopic ActiveReads = new("ar", TopicType.State);
+    public static readonly WebsocketTopic LiveStats = new("ls", TopicType.State);
 
     // Eventful topics
     public static readonly WebsocketTopic QueueItemAdded = new("qa", TopicType.Event);

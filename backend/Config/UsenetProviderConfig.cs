@@ -37,6 +37,24 @@ public class UsenetProviderConfig
         // linear STAT) and only opt in once the user has tested + enabled pipelining.
         public bool StatPipeliningEnabled { get; set; } = false;
 
+        // Optional user-friendly label shown in the UI in place of Host. Host is
+        // still the real NNTP target and the stable key used for metrics/logs.
+        public string? Nickname { get; set; }
+
+        // null or 0 = no cap. Used by block-account holders to stop a paid block
+        // from being drained beyond its purchased size.
+        public long? ByteLimit { get; set; }
+
+        // bytes added to the computed usage. Lets the user seed a starting value
+        // when migrating from another client, or adjust drift against the
+        // provider's own portal. Set to 0 after a reset.
+        public long BytesUsedOffset { get; set; }
+
+        // unix-ms cutoff: ProviderHourly rows older than this don't contribute to
+        // the live counter. A reset bumps this to "now" so the gauge starts fresh
+        // without losing the historical metrics rows underneath.
+        public long BytesUsedResetAt { get; set; }
+
         // Pooled providers always serve health checks. Backup providers join the STAT fan-out
         // only when the global "use backup providers for health checks" setting is on AND the
         // provider opted in: either its type is "Backup & Health Checks" (linear STATs, no
