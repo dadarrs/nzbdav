@@ -261,6 +261,21 @@ class BackendClient {
         }
         return await response.json();
     }
+
+    public async getProviderUsage(): Promise<ProviderUsageResponse> {
+        const url = process.env.BACKEND_URL + "/api/get-provider-usage";
+
+        const apiKey = process.env.FRONTEND_BACKEND_API_KEY || "";
+        const response = await fetch(url, {
+            method: "GET",
+            headers: { "x-api-key": apiKey }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to get provider usage: ${(await response.json()).error}`);
+        }
+        return await response.json();
+    }
 }
 
 export const backendClient = new BackendClient();
@@ -580,4 +595,25 @@ export type LiveStatsMessage = {
     errorsPerMinute: number,
     bytesServedPerMinute: number,
     ts: number,
+}
+
+export type ProviderUsageResponse = {
+    status: boolean,
+    error?: string,
+    providers: ProviderUsageItem[],
+}
+
+export type ProviderUsageItem = {
+    // Index into the usenet.providers config list — same key the settings UI
+    // uses for edit/delete actions, so the frontend can join without an ID.
+    index: number,
+    host: string,
+    nickname?: string | null,
+    bytesUsed: number,
+    byteLimit: number | null,
+    overLimit: boolean,
+    bytesPerDay: number,
+    // Projected days until the cap is hit at the recent burn rate. Null when
+    // there is no cap, no recent activity, or the cap is already exceeded.
+    daysRemaining: number | null,
 }

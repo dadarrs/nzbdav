@@ -210,6 +210,117 @@
     transition: width 0.3s ease;
 }
 
+.provider-host-secondary {
+    font-size: 12px;
+    font-weight: 400;
+    color: #6b8494;
+    word-break: break-all;
+    line-height: 1.3;
+    margin-bottom: 2px;
+}
+
+.usage-row {
+    padding: 10px 12px;
+    background: hsl(198 100% 3.5%);
+    border: 1px solid hsl(198 100% 7%);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.usage-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.usage-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b8494;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    flex-shrink: 0;
+}
+
+.usage-value-ok,
+.usage-value-warn,
+.usage-value-danger {
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    flex: 1;
+    color: #a5b8c5;
+}
+
+.usage-value-warn {
+    color: #b58900;
+}
+
+.usage-value-danger {
+    color: #dc322f;
+}
+
+.usage-reset {
+    background: transparent;
+    border: 1px solid hsl(198 100% 10%);
+    border-radius: 5px;
+    color: #6b8494;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    transition: all 0.2s ease;
+}
+
+.usage-reset:hover {
+    background: hsl(198 100% 5%);
+    border-color: #268bd2;
+    color: #5dade2;
+}
+
+.usage-bar-track {
+    position: relative;
+    height: 6px;
+    width: 100%;
+    background: hsl(198 100% 7%);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.usage-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 200ms ease;
+}
+
+.usage-bar-ok {
+    background: linear-gradient(90deg, #859900, #2aa198);
+}
+
+.usage-bar-warn {
+    background: linear-gradient(90deg, #b58900, #cb4b16);
+}
+
+.usage-bar-danger {
+    background: linear-gradient(90deg, #dc322f, #cb4b16);
+}
+
+.usage-hint {
+    font-size: 11px;
+    color: #6b8494;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+}
+
+.usage-warning {
+    font-size: 11px;
+    color: #dc322f;
+    line-height: 1.4;
+}
+
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -340,6 +451,13 @@
     font-weight: 500;
     color: #839496;
     margin-bottom: 8px;
+}
+
+.form-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #6b8494;
+    line-height: 1.4;
 }
 
 .form-input {

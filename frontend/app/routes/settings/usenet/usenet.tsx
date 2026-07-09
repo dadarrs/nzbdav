@@ -2,12 +2,15 @@ import styles from "./usenet.module.css"
 import { type Dispatch, type SetStateAction, useState, useCallback, useEffect, useMemo } from "react";
 import { Button } from "react-bootstrap";
 import { receiveMessage } from "~/utils/websocket-util";
+import type { ProviderUsageItem } from "~/clients/backend-client.server";
 
 const usenetConnectionsTopic = {'cxs': 'state'};
+const USAGE_POLL_INTERVAL_MS = 10_000;
 
 type UsenetSettingsProps = {
     config: Record<string, string>
     setNewConfig: Dispatch<SetStateAction<Record<string, string>>>
+    initialUsage?: ProviderUsageItem[]
 };
 
 enum ProviderType {
@@ -26,6 +29,16 @@ type ConnectionDetails = {
     Pass: string;
     MaxConnections: number;
     StatPipeliningEnabled?: boolean;
+    // Optional user-set label. Shown in the UI in place of Host when present;
+    // Host stays the real NNTP target.
+    Nickname?: string;
+    // null/0 = no cap. Stored as bytes; the modal takes a GB value and
+    // converts on save.
+    ByteLimit?: number | null;
+    // Counter adjustment in bytes. Zeroed by the "Reset" button on the card.
+    BytesUsedOffset?: number;
+    // unix-ms cutoff for the usage counter; a reset bumps this to Date.now().
+    BytesUsedResetAt?: number;
 };
 
 type ConnectionCounts = {
@@ -60,11 +73,64 @@ function serializeProviderConfig(config: UsenetProviderConfig): string {
     return JSON.stringify(config);
 }
 
-export function UsenetSettings({ config, setNewConfig }: UsenetSettingsProps) {
+// Data caps use decimal units (1 GB = 10^9 bytes), matching how block
+// providers advertise their blocks.
+const BYTES_PER_GB = 1_000_000_000;
+
+function bytesToGbString(bytes: number | null | undefined): string {
+    if (!bytes || bytes <= 0) return "";
+    // Trim trailing zeros so 500 GB doesn't display as "500.000".
+    return Number((bytes / BYTES_PER_GB).toFixed(3)).toString();
+}
+
+function gbStringToBytes(value: string): number | null {
+    const trimmed = value.trim();
+    if (trimmed === "") return null;
+    const gb = Number(trimmed);
+    if (!isFinite(gb) || gb <= 0) return null;
+    return Math.round(gb * BYTES_PER_GB);
+}
+
+function isValidDataCap(value: string): boolean {
+    const trimmed = value.trim();
+    if (trimmed === "") return true;
+    const gb = Number(trimmed);
+    // 0 is allowed and means "no cap", same as leaving the field empty.
+    return isFinite(gb) && gb >= 0;
+}
+
+function formatBytes(bytes: number): string {
+    if (!isFinite(bytes) || bytes <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+    let i = 0;
+    let v = bytes;
+    while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
+    return v >= 100 ? `${v.toFixed(0)} ${units[i]}` : `${v.toFixed(1)} ${units[i]}`;
+}
+
+function formatDaysRemaining(days: number): string {
+    // Friendlier than "0.3 days" or "847 days" — round to the unit that's
+    // actually useful at this horizon.
+    if (days < 1) {
+        const hours = Math.max(1, Math.round(days * 24));
+        return `~${hours}h left at this pace`;
+    }
+    if (days < 60) return `~${Math.round(days)} days left at this pace`;
+    const months = days / 30;
+    if (months < 24) return `~${Math.round(months)} months left at this pace`;
+    return `~${Math.round(months / 12)} years left at this pace`;
+}
+
+export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSettingsProps) {
     // state
     const [showModal, setShowModal] = useState(false);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [connections, setConnections] = useState<{[index: number]: ConnectionCounts}>({});
+    const [usage, setUsage] = useState<{[index: number]: ProviderUsageItem}>(() => {
+        const seeded: {[index: number]: ProviderUsageItem} = {};
+        for (const item of initialUsage ?? []) seeded[item.index] = item;
+        return seeded;
+    });
     const providerConfig = useMemo(() => parseProviderConfig(config["usenet.providers"]), [config]);
 
     // handlers
@@ -81,6 +147,17 @@ export function UsenetSettings({ config, setNewConfig }: UsenetSettingsProps) {
     const handleDeleteProvider = useCallback((index: number) => {
         const newProviderConfig = { ...providerConfig };
         newProviderConfig.Providers = providerConfig.Providers.filter((_, i) => i !== index);
+        setNewConfig({ ...config, "usenet.providers": serializeProviderConfig(newProviderConfig) });
+    }, [config, providerConfig, setNewConfig]);
+
+    const handleResetUsage = useCallback((index: number) => {
+        const current = providerConfig.Providers[index];
+        if (!current) return;
+        const label = current.Nickname?.trim() || current.Host;
+        if (!confirm(`Reset the bytes-used counter for "${label}" to zero?\n\nUseful after buying a new block. Takes effect when you save settings.`)) return;
+        const newProviderConfig = { ...providerConfig };
+        newProviderConfig.Providers = providerConfig.Providers.map((p, i) =>
+            i === index ? { ...p, BytesUsedOffset: 0, BytesUsedResetAt: Date.now() } : p);
         setNewConfig({ ...config, "usenet.providers": serializeProviderConfig(newProviderConfig) });
     }, [config, providerConfig, setNewConfig]);
 
@@ -131,6 +208,32 @@ export function UsenetSettings({ config, setNewConfig }: UsenetSettingsProps) {
         return connect();
     }, [setConnections, handleConnectionsMessage]);
 
+    // Poll provider usage so the cards stay fresh while the tab is open. The
+    // loader already seeded an initial snapshot; the express proxy attaches
+    // the api key for authenticated sessions, same as the connection tests.
+    // Skip polling while the edit modal is open so the card behind it doesn't
+    // flicker mid-edit.
+    useEffect(() => {
+        if (showModal) return;
+        let disposed = false;
+        async function fetchUsage() {
+            try {
+                const response = await fetch('/api/get-provider-usage');
+                if (!response.ok || disposed) return;
+                const data: { providers?: ProviderUsageItem[] } = await response.json();
+                if (disposed || !data.providers) return;
+                const next: {[index: number]: ProviderUsageItem} = {};
+                for (const item of data.providers) next[item.index] = item;
+                setUsage(next);
+            } catch {
+                // network blips are fine — the next tick retries.
+            }
+        }
+        fetchUsage();
+        const id = setInterval(fetchUsage, USAGE_POLL_INTERVAL_MS);
+        return () => { disposed = true; clearInterval(id); };
+    }, [showModal, setUsage]);
+
     // view
     return (
         <div className={styles.container}>
@@ -154,8 +257,13 @@ export function UsenetSettings({ config, setNewConfig }: UsenetSettingsProps) {
                                     <div className={styles["provider-header"]}>
                                         <div className={styles["provider-header-content"]}>
                                             <div className={styles["provider-host"]}>
-                                                {provider.Host}
+                                                {provider.Nickname?.trim() || provider.Host}
                                             </div>
+                                            {provider.Nickname?.trim() && (
+                                                <div className={styles["provider-host-secondary"]}>
+                                                    {provider.Host}
+                                                </div>
+                                            )}
                                             <div className={styles["provider-port"]}>
                                                 Port {provider.Port}
                                             </div>
@@ -265,6 +373,12 @@ export function UsenetSettings({ config, setNewConfig }: UsenetSettingsProps) {
                                             </div>
 
                                         </div>
+
+                                        <UsageRow
+                                            provider={provider}
+                                            usage={usage[index]}
+                                            onReset={() => handleResetUsage(index)}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -284,6 +398,59 @@ export function UsenetSettings({ config, setNewConfig }: UsenetSettingsProps) {
     );
 }
 
+type UsageRowProps = {
+    provider: ConnectionDetails;
+    usage: ProviderUsageItem | undefined;
+    onReset: () => void;
+};
+
+function UsageRow({ provider, usage, onReset }: UsageRowProps) {
+    // Only providers with a configured cap get a usage bar; null/0 = no cap.
+    const limit = provider.ByteLimit ?? 0;
+    if (limit <= 0) return null;
+
+    const used = usage?.bytesUsed ?? 0;
+    const pct = Math.min(100, (used / limit) * 100);
+    // The backend takes an over-limit provider out of rotation at ~95% of the
+    // cap, so "danger" starts where the pause actually kicks in.
+    const tone = pct >= 95 ? "danger" : pct >= 80 ? "warn" : "ok";
+
+    return (
+        <div className={styles["usage-row"]}>
+            <div className={styles["usage-header"]}>
+                <span className={styles["usage-label"]}>Data Cap</span>
+                <span className={styles[`usage-value-${tone}`]}>
+                    {formatBytes(used)} / {formatBytes(limit)}&nbsp;&nbsp;·&nbsp;&nbsp;{pct.toFixed(1)}%
+                </span>
+                <button
+                    type="button"
+                    className={styles["usage-reset"]}
+                    onClick={onReset}
+                    title="Reset the counter to zero (e.g. after buying a new block). Applies when you save settings."
+                >
+                    Reset
+                </button>
+            </div>
+            <div className={styles["usage-bar-track"]}>
+                <div
+                    className={`${styles["usage-bar-fill"]} ${styles[`usage-bar-${tone}`]}`}
+                    style={{ width: `${pct}%` }}
+                />
+            </div>
+            {usage?.overLimit ? (
+                <div className={styles["usage-warning"]}>
+                    Data cap reached. This provider is paused to keep in-flight fetches from
+                    overshooting. Reset the counter or raise the cap to resume.
+                </div>
+            ) : usage && usage.daysRemaining != null && (
+                <div className={styles["usage-hint"]}>
+                    {formatDaysRemaining(usage.daysRemaining)}
+                </div>
+            )}
+        </div>
+    );
+}
+
 type ProviderModalProps = {
     show: boolean;
     provider: ConnectionDetails | null;
@@ -293,6 +460,8 @@ type ProviderModalProps = {
 };
 
 function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSave }: ProviderModalProps) {
+    const [nickname, setNickname] = useState(provider?.Nickname || "");
+    const [dataCapGb, setDataCapGb] = useState(bytesToGbString(provider?.ByteLimit));
     const [host, setHost] = useState(provider?.Host || "");
     const [port, setPort] = useState(provider?.Port?.toString() || "");
     const [useSsl, setUseSsl] = useState(provider?.UseSsl ?? true);
@@ -318,6 +487,8 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
     // Reset form when modal opens or provider changes
     useEffect(() => {
         if (show) {
+            setNickname(provider?.Nickname || "");
+            setDataCapGb(bytesToGbString(provider?.ByteLimit));
             setHost(provider?.Host || "");
             setPort(provider?.Port?.toString() || "");
             setUseSsl(provider?.UseSsl ?? true);
@@ -422,6 +593,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
     }, [host, port, useSsl, user, pass]);
 
     const handleSave = useCallback(() => {
+        const trimmedNickname = nickname.trim();
         onSave({
             Type: type,
             Host: host,
@@ -431,8 +603,15 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
             Pass: pass,
             MaxConnections: parseInt(maxConnections, 10),
             StatPipeliningEnabled: statPipeliningEnabled,
+            Nickname: trimmedNickname === "" ? undefined : trimmedNickname,
+            ByteLimit: gbStringToBytes(dataCapGb),
+            // Preserve the usage-counter bookkeeping across edits so saving a
+            // provider doesn't rewind its gauge; new providers start at zero.
+            // The card's "Reset" button is the surface for changing these.
+            BytesUsedOffset: provider?.BytesUsedOffset ?? 0,
+            BytesUsedResetAt: provider?.BytesUsedResetAt ?? 0,
         });
-    }, [type, host, port, useSsl, user, pass, maxConnections, statPipeliningEnabled, onSave]);
+    }, [type, host, port, useSsl, user, pass, maxConnections, statPipeliningEnabled, nickname, dataCapGb, provider, onSave]);
 
     const handleOverlayClick = useCallback((e: React.MouseEvent) => {
         if (e.target === e.currentTarget) {
@@ -444,7 +623,8 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
         && isPositiveInteger(port)
         && user.trim() !== ""
         && pass.trim() !== ""
-        && isPositiveInteger(maxConnections);
+        && isPositiveInteger(maxConnections)
+        && isValidDataCap(dataCapGb);
 
     const canSave = isFormValid && (connectionTested || type == ProviderType.Disabled);
 
@@ -464,6 +644,42 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
 
                 <div className={styles["modal-body"]}>
                     <div className={styles["form-grid"]}>
+                        <div className={styles["form-group"]}>
+                            <label htmlFor="provider-nickname" className={styles["form-label"]}>
+                                Nickname (optional)
+                            </label>
+                            <input
+                                type="text"
+                                id="provider-nickname"
+                                className={styles["form-input"]}
+                                placeholder="e.g. Main provider"
+                                value={nickname}
+                                onChange={(e) => setNickname(e.target.value)}
+                            />
+                            <div className={styles["form-hint"]}>
+                                Friendly label shown in place of the hostname.
+                            </div>
+                        </div>
+
+                        <div className={styles["form-group"]}>
+                            <label htmlFor="provider-data-cap" className={styles["form-label"]}>
+                                Data cap (GB, optional)
+                            </label>
+                            <input
+                                type="text"
+                                inputMode="decimal"
+                                id="provider-data-cap"
+                                className={`${styles["form-input"]} ${!isValidDataCap(dataCapGb) ? styles.error : ""}`}
+                                placeholder="Leave blank for no cap"
+                                value={dataCapGb}
+                                onChange={(e) => setDataCapGb(e.target.value)}
+                            />
+                            <div className={styles["form-hint"]}>
+                                For block accounts: total GB purchased. The provider pauses
+                                at ~95% of this to absorb in-flight requests. Empty or 0 = no cap.
+                            </div>
+                        </div>
+
                         <div className={styles["form-group"]}>
                             <label htmlFor="provider-host" className={styles["form-label"]}>
                                 Host

@@ -1,7 +1,7 @@
 import type { Route } from "./+types/route";
 import styles from "./route.module.css"
 import { Tabs, Tab, Button } from "react-bootstrap"
-import { backendClient } from "~/clients/backend-client.server";
+import { backendClient, type ProviderUsageItem } from "~/clients/backend-client.server";
 import { isUsenetSettingsUpdated, UsenetSettings } from "./usenet/usenet";
 import { isSabnzbdSettingsUpdated, isSabnzbdSettingsValid, SabnzbdSettings } from "./sabnzbd/sabnzbd";
 import { isWebdavSettingsUpdated, isWebdavSettingsValid, WebdavSettings } from "./webdav/webdav";
@@ -65,9 +65,17 @@ export async function loader({ request }: Route.LoaderArgs) {
         config[item.configName] = item.configValue;
     }
 
+    // fetch the initial provider-usage snapshot. Non-fatal: the usenet tab
+    // refreshes it client-side after mount, so a hiccup here only means the
+    // usage bars start empty.
+    const providerUsage: ProviderUsageItem[] = await backendClient.getProviderUsage()
+        .then(response => response.providers || [])
+        .catch(() => []);
+
     return {
         config: config,
         appVersion: process.env.NZBDAV_VERSION ?? "unknown",
+        providerUsage: providerUsage,
     }
 }
 
@@ -80,6 +88,7 @@ export default function Settings(props: Route.ComponentProps) {
 type BodyProps = {
     config: Record<string, string>,
     appVersion: string,
+    providerUsage: ProviderUsageItem[],
 };
 
 function Body(props: BodyProps) {
@@ -154,7 +163,7 @@ function Body(props: BodyProps) {
                 className={styles.tabs}
             >
                 <Tab eventKey="usenet" title={usenetTitle}>
-                    <UsenetSettings config={newConfig} setNewConfig={setNewConfig} />
+                    <UsenetSettings config={newConfig} setNewConfig={setNewConfig} initialUsage={props.providerUsage} />
                 </Tab>
                 <Tab eventKey="sabnzbd" title={sabnzbdTitle}>
                     <SabnzbdSettings config={newConfig} setNewConfig={setNewConfig} appVersion={props.appVersion} />
