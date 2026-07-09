@@ -246,6 +246,21 @@ class BackendClient {
         }
         return await response.json();
     }
+
+    public async getOverviewStats(window: OverviewWindow = "24h"): Promise<OverviewStatsResponse> {
+        const url = `${process.env.BACKEND_URL}/api/get-overview-stats?window=${window}`;
+
+        const apiKey = process.env.FRONTEND_BACKEND_API_KEY || "";
+        const response = await fetch(url, {
+            method: "GET",
+            headers: { "x-api-key": apiKey }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to get overview stats: ${(await response.json()).error}`);
+        }
+        return await response.json();
+    }
 }
 
 export const backendClient = new BackendClient();
@@ -384,4 +399,185 @@ export type GetLogsResponse = {
 
 export type LogBroadcastMessage = {
     entries: LogEntry[],
+}
+
+export type OverviewWindow = "24h" | "7d" | "30d" | "all";
+
+export type OverviewStatsResponse = {
+    window: OverviewWindow,
+    tiles: {
+        activeReads: number,
+        articlesPerMinute: number,
+        errorsPerMinute: number,
+        bytesServedPerMinute: number,
+    },
+    throughput: ThroughputPoint[],
+    totalArticles: number,
+    totalErrors: number,
+    totalBytesFetched: number,
+    providers: ProviderRow[],
+    catalogue: {
+        fileCount: number,
+        totalBytes: number,
+        largestFileBytes: number,
+        addedLast7Days: number,
+    },
+    sessions: {
+        count: number,
+        totalBytesServed: number,
+        avgDurationMs: number,
+        longestDurationMs: number,
+        biggestReadBytes: number,
+    },
+    heatmap: {
+        maxCell: number,
+        mode: HeatmapMode,
+        windowStartMs: number,
+        windowEndMs: number,
+        bucketSizeMs: number,
+        cells: HeatmapCell[],
+    },
+    latency: {
+        p50Ms: number,
+        p95Ms: number,
+        p99Ms: number,
+        samples: number,
+        buckets: LatencyBucket[],
+    },
+    errors: ErrorSlice[],
+    // Always empty lists from our backend (no indexer integration); the
+    // indexer components from the fork were intentionally not ported.
+    indexers: IndexerRow[],
+    indexerApiUsage: IndexerApiUsageRow[],
+    lifetime: {
+        bytesFetched: number,
+        bytesRead: number,
+        articles: number,
+        readSessions: number,
+        readSeconds: number,
+        firstSeenAt: number | null,
+    },
+    records: {
+        bestDayBytes: number,
+        bestDayAt: number | null,
+        bestHourBytes: number,
+        bestHourAt: number | null,
+    },
+    failover: FailoverBlock,
+}
+
+export type FailoverBlock = {
+    articlesRecovered: number,
+    previousArticlesRecovered: number | null,
+    segmentsCovered: number,
+    readsSaved: number,
+    readSessions: number,
+    totalArticles: number,
+    bucketSizeMs: number,
+    rescuedBy: FailoverProvider[],
+    rescuedFrom: FailoverFrom[],
+    reasons: FailoverReason[],
+    buckets: FailoverBucket[],
+}
+
+export type FailoverProvider = {
+    provider: string,
+    nickname?: string | null,
+    saves: number,
+}
+
+export type FailoverFrom = {
+    provider: string,
+    nickname?: string | null,
+    misses: number,
+}
+
+export type FailoverReason = {
+    status: string,
+    count: number,
+}
+
+export type FailoverBucket = {
+    bucket: number,
+    counts: number[],
+}
+
+export type ThroughputPoint = {
+    bucket: number,
+    articles: number,
+    errors: number,
+    bytesServed: number,
+}
+
+export type ProviderRow = {
+    provider: string,
+    nickname?: string | null,
+    articles: number,
+    bytesFetched: number,
+    errors: number,
+    retries: number,
+    avgDurationMs: number,
+    errorRate: number,
+    spark: number[],
+}
+
+export type HeatmapMode = "day" | "week" | "month" | "year";
+
+export type HeatmapCell = {
+    bucket: number,
+    count: number,
+}
+
+export type LatencyBucket = {
+    loMs: number,
+    hiMs: number,
+    count: number,
+}
+
+export type ErrorSlice = {
+    status: string,
+    count: number,
+}
+
+export type IndexerRow = {
+    name: string,
+    completed: number,
+    failed: number,
+    bytesCompleted: number,
+    avgSeconds: number,
+    successRate: number,
+}
+
+export type IndexerApiUsageRow = {
+    name: string,
+    apiHits: number,
+    apiHitLimit: number | null,
+    downloadHits: number,
+    downloadHitLimit: number | null,
+    resetAtMs: number,
+    resetHourUtc: number | null,
+}
+
+export type ActiveReadsMessage = {
+    reads: ActiveRead[],
+}
+
+export type ActiveRead = {
+    id: string,
+    fileName: string,
+    path: string,
+    startedAt: number,
+    lastActivityAt: number,
+    bytesRead: number,
+    currentOffset: number,
+    fileSize: number | null,
+    providers: { host: string, nickname?: string | null, segments: number }[],
+}
+
+export type LiveStatsMessage = {
+    activeReads: number,
+    articlesPerMinute: number,
+    errorsPerMinute: number,
+    bytesServedPerMinute: number,
+    ts: number,
 }

@@ -1,0 +1,24 @@
+declare const styles: {
+  readonly container: string;
+  readonly header: string;
+  readonly title: string;
+  readonly sub: string;
+  readonly allClear: string;
+  readonly allClearDot: string;
+  readonly allClearTitle: string;
+  readonly allClearSub: string;
+  readonly headline: string;
+  readonly headlineCount: string;
+  readonly headlineLabel: string;
+  readonly stack: string;
+  readonly stackSeg: string;
+  readonly stackSegDim: string;
+  readonly legend: string;
+  readonly legendItem: string;
+  readonly legendActive: string;
+  readonly swatch: string;
+  readonly legendLabel: string;
+  readonly legendCount: string;
+  readonly legendPct: string;
+};
+export = styles;

@@ -8,6 +8,7 @@ declare const styles: {
   readonly "health-icon": string;
   readonly "item": string;
   readonly "logout-icon": string;
+  readonly "overview-icon": string;
   readonly "logs-icon": string;
   readonly "queue-icon": string;
   readonly "settings-icon": string;

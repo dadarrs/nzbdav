@@ -1,0 +1,148 @@
+.container {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.header {
+    margin-bottom: 14px;
+}
+
+.title {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+}
+
+.sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.allClear {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 12px 8px;
+}
+
+.allClearDot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--success);
+    flex-shrink: 0;
+}
+
+.allClearTitle {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.allClearSub {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.headline {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.headlineCount {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.025em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.headlineLabel {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+}
+
+.stack {
+    display: flex;
+    width: 100%;
+    height: 10px;
+    border-radius: 100px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.03);
+    margin-bottom: 14px;
+}
+
+.stackSeg {
+    height: 100%;
+    transition: opacity 120ms ease, filter 120ms ease;
+    cursor: default;
+}
+
+.stackSeg:hover {
+    filter: brightness(1.2);
+}
+
+.stackSegDim {
+    opacity: 0.35;
+}
+
+.legend {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 6px 14px;
+}
+
+.legendItem {
+    display: grid;
+    grid-template-columns: 10px 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    font-size: 12px;
+    transition: background 100ms ease;
+    cursor: default;
+}
+
+.legendActive {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+}
+
+.legendLabel {
+    color: var(--text-primary);
+}
+
+.legendCount {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.legendPct {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+}
