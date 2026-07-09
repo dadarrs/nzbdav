@@ -141,6 +141,13 @@ public class UsenetStreamingClient : WrappingNntpClient
     )
     {
         var providerConfig = configManager.GetUsenetProviderConfig();
+
+        // Seed the byte tracker from the persisted metrics rollup so the data-cap gate is
+        // accurate before the first article fetch. Fire-and-forget: the helper logs and
+        // swallows DB errors, so limit enforcement degrades to "uncapped until seeded".
+        if (bytesTracker != null)
+            _ = ProviderUsageHelper.SeedTrackerAsync(bytesTracker, providerConfig);
+
         var connectionPoolStats = new ConnectionPoolStats(
             providerConfig,
             configManager.UseBackupProvidersForHealthChecks,
@@ -181,7 +188,9 @@ public class UsenetStreamingClient : WrappingNntpClient
             connectionDetails.Type,
             circuitBreaker,
             connectionDetails.Host,
-            connectionDetails.StatPipeliningEnabled);
+            connectionDetails.StatPipeliningEnabled,
+            connectionDetails.ByteLimit,
+            connectionDetails.BytesUsedOffset);
     }
 
     private static ConnectionPool<INntpClient> CreateNewConnectionPool

@@ -343,6 +343,7 @@ public class MultiProviderNntpClient(
     {
         var enabled = providers
             .Where(x => x.ProviderType != ProviderType.Disabled)
+            .Where(x => !IsOverLimit(x))
             .OrderBy(x => x.ProviderType)
             .ThenByDescending(x => x.AvailableConnections)
             .ToList();
@@ -351,6 +352,18 @@ public class MultiProviderNntpClient(
 
         // Always return at least one provider so cooldown probes can fire.
         return healthy.Count > 0 ? healthy : enabled;
+    }
+
+    private bool IsOverLimit(MultiConnectionNntpClient client)
+    {
+        var limit = client.ByteLimit;
+        if (bytesTracker == null || !limit.HasValue || limit.Value <= 0) return false;
+        var used = bytesTracker.GetLifetime(client.Host) + client.BytesUsedOffset;
+        // Stop at the effective cutoff (95% of cap) so in-flight fetches that
+        // already passed this check can't push the actual count past the cap.
+        // See ProviderUsageHelper.EffectiveLimitFraction for the rationale.
+        var effective = (long)(limit.Value * ProviderUsageHelper.EffectiveLimitFraction);
+        return used >= effective;
     }
 
     /// <summary>

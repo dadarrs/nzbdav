@@ -28,12 +28,16 @@ public class MultiConnectionNntpClient(
     ProviderType type,
     ProviderCircuitBreaker circuitBreaker,
     string providerName,
-    bool statPipeliningEnabled = false
+    bool statPipeliningEnabled = false,
+    long? byteLimit = null,
+    long bytesUsedOffset = 0
 ) : NntpClient
 {
     public ProviderType ProviderType { get; } = type;
     public string Host { get; } = providerName;
     public bool StatPipeliningEnabled { get; } = statPipeliningEnabled;
+    public long? ByteLimit { get; } = byteLimit;
+    public long BytesUsedOffset { get; } = bytesUsedOffset;
     public bool IsTripped => circuitBreaker.IsTripped;
     public int LiveConnections => connectionPool.LiveConnections;
     public int IdleConnections => connectionPool.IdleConnections;
