@@ -185,6 +185,19 @@ public class ConfigManager
     }
 
     /// <summary>
+    /// Scopes backup-provider health checks: when disabled (the default), backup providers only
+    /// carry the on-add check (once per import) and periodic background library re-scans stay on
+    /// pooled providers, so block quotas are not drained continuously. Only meaningful while
+    /// UseBackupProvidersForHealthChecks is enabled.
+    /// </summary>
+    public bool UseBackupProvidersForBackgroundHealthChecks()
+    {
+        var defaultValue = false;
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("api.backup-providers-for-background-health-checks"));
+        return (configValue != null ? bool.Parse(configValue) : defaultValue);
+    }
+
+    /// <summary>
     /// Master switch for NNTP STAT pipelining. When disabled, STAT health checks always run
     /// one-command-per-round-trip regardless of any provider's individual pipelining setting.
     /// </summary>

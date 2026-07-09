@@ -39,9 +39,11 @@ public class UsenetProviderConfig
 
         // Pooled providers always serve health checks. Backup providers join the STAT fan-out
         // only when the global "use backup providers for health checks" setting is on AND the
-        // provider itself has the pipelining tickbox enabled (the per-provider tickbox doubles
-        // as the opt-in, so a provider whose STAT support is broken can be left out).
+        // provider opted in: either its type is "Backup & Health Checks" (linear STATs, no
+        // pipelining required) or its pipelining tickbox is enabled. Either opt-in is
+        // per-provider, so a provider whose STAT support is broken can be left out.
         public bool IsStatCheckEligible(bool useBackupProviders) => Type == ProviderType.Pooled
-            || (useBackupProviders && Type != ProviderType.Disabled && StatPipeliningEnabled);
+            || (useBackupProviders && Type != ProviderType.Disabled
+                                   && (StatPipeliningEnabled || Type == ProviderType.BackupAndStats));
     }
 }

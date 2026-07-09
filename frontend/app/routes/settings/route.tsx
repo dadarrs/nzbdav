@@ -33,6 +33,7 @@ const defaultConfig = {
     "usenet.nntp-pipelining.enabled": "true",
     "usenet.nntp-pipelining.depth": "50",
     "api.backup-providers-for-health-checks": "false",
+    "api.backup-providers-for-background-health-checks": "false",
     "webdav.user": "admin",
     "webdav.pass": "",
     "webdav.show-hidden-files": "false",

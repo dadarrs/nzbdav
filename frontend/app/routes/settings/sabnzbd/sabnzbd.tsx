@@ -256,10 +256,26 @@ export function SabnzbdSettings({ config, setNewConfig, appVersion }: SabnzbdSet
                     onChange={e => setNewConfig({ ...config, "api.backup-providers-for-health-checks": "" + e.target.checked })} />
                 <Form.Text id="backup-providers-for-health-checks-help" muted>
                     Lets backup providers carry article health checks alongside pooled providers,
-                    speeding up checks. Only backup providers with STAT pipelining enabled on the
-                    Usenet tab participate. STAT checks download no article data, but note that
-                    the protocol traffic can still count toward block quotas: roughly 0.7&nbsp;MB
-                    per 10&nbsp;GB of content checked.
+                    speeding up checks. Backup providers participate if their type is
+                    “Backup&nbsp;&amp;&nbsp;Health&nbsp;Checks” or they have STAT pipelining
+                    enabled on the Usenet tab. STAT checks download no article data, but note
+                    that the protocol traffic can still count toward block quotas: roughly
+                    0.7&nbsp;MB per 10&nbsp;GB of content checked.
+                </Form.Text>
+                <Form.Check
+                    className={styles.input}
+                    style={{ marginTop: '15px' }}
+                    type="checkbox"
+                    id="backup-providers-for-background-health-checks-checkbox"
+                    aria-describedby="backup-providers-for-background-health-checks-help"
+                    label={`Also use Backup Providers for background health checks`}
+                    checked={config["api.backup-providers-for-background-health-checks"] === "true"}
+                    disabled={config["api.backup-providers-for-health-checks"] !== "true"}
+                    onChange={e => setNewConfig({ ...config, "api.backup-providers-for-background-health-checks": "" + e.target.checked })} />
+                <Form.Text id="backup-providers-for-background-health-checks-help" muted>
+                    When unticked, backup providers only help with the on-add check (once per
+                    import). Background health checks re-scan the whole library on a schedule,
+                    so leaving this off keeps that recurring traffic away from block quotas.
                 </Form.Text>
             </Form.Group>
             <hr />
@@ -382,6 +398,7 @@ export function isSabnzbdSettingsUpdated(config: Record<string, string>, newConf
         || config["usenet.nntp-pipelining.enabled"] !== newConfig["usenet.nntp-pipelining.enabled"]
         || config["usenet.nntp-pipelining.depth"] !== newConfig["usenet.nntp-pipelining.depth"]
         || config["api.backup-providers-for-health-checks"] !== newConfig["api.backup-providers-for-health-checks"]
+        || config["api.backup-providers-for-background-health-checks"] !== newConfig["api.backup-providers-for-background-health-checks"]
 }
 
 export function isSabnzbdSettingsValid(newConfig: Record<string, string>) {

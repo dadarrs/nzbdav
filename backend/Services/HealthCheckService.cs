@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using NzbWebDAV.Clients.Usenet;
+using NzbWebDAV.Clients.Usenet.Contexts;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
@@ -57,11 +58,19 @@ public class HealthCheckService : BackgroundService
                 }
 
                 // get concurrency -- STAT checks may fan out beyond the pooled providers:
-                // opted-in backup providers carry them too (STAT transfers no article
-                // bytes, so block accounts spend almost nothing).
+                // opted-in backup providers carry them too, unless backups are scoped to
+                // on-add checks only (background re-scans repeat forever, so they can drain
+                // block quotas that on-add checks barely touch).
+                var useBackupProviders = _configManager.UseBackupProvidersForHealthChecks()
+                                         && _configManager.UseBackupProvidersForBackgroundHealthChecks();
                 var concurrency = _configManager.GetUsenetProviderConfig()
-                    .TotalStatCheckConnections(_configManager.UseBackupProvidersForHealthChecks());
+                    .TotalStatCheckConnections(useBackupProviders);
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
+                // mark this token's work as a background health check so the provider fan-out
+                // can honor the on-add-only scoping for backup providers.
+                using var backgroundContext =
+                    CancellationTokenContext.SetContext(cts.Token, new BackgroundHealthCheckContext());
 
                 // get the davItem to health-check
                 await using var dbContext = new DavDatabaseContext();

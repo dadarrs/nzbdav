@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using NzbWebDAV.Clients.Usenet.Connections;
+using NzbWebDAV.Clients.Usenet.Contexts;
 using NzbWebDAV.Config;
 using NzbWebDAV.Exceptions;
 using NzbWebDAV.Extensions;
@@ -69,7 +70,8 @@ public class UsenetStreamingClient : WrappingNntpClient
             "Article health check: PIPELINED STAT path ({Count} segments, depth {Depth}, concurrency {Concurrency})",
             ids.Count, depth, concurrency);
 
-        using var childCt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // Contextual so the background-health-check marker survives onto the batch tokens.
+        using var childCt = ContextualCancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = childCt.Token;
 
         // Check the segments in pipelined batches of `depth`, running up to `concurrency` batches at
@@ -134,11 +136,14 @@ public class UsenetStreamingClient : WrappingNntpClient
                 connectionPoolStats.GetOnConnectionPoolChanged(index)
             ))
             .ToList();
-        // The flag is read through a delegate so toggling the setting takes effect immediately;
-        // the client itself is only rebuilt when the provider list changes.
+        // The flags are read through a delegate so toggling the settings takes effect
+        // immediately; the client itself is only rebuilt when the provider list changes.
+        // Backup providers may be scoped to on-add checks only.
         return new MultiProviderNntpClient(
             providerClients,
-            configManager.UseBackupProvidersForHealthChecks);
+            isBackgroundCheck => configManager.UseBackupProvidersForHealthChecks()
+                                 && (!isBackgroundCheck ||
+                                     configManager.UseBackupProvidersForBackgroundHealthChecks()));
     }
 
     private static MultiConnectionNntpClient CreateProviderClient

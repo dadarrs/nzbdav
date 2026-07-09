@@ -1,4 +1,5 @@
 ﻿using System.Runtime.ExceptionServices;
+using NzbWebDAV.Clients.Usenet.Contexts;
 using NzbWebDAV.Clients.Usenet.Models;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Models;
@@ -9,7 +10,7 @@ namespace NzbWebDAV.Clients.Usenet;
 
 public class MultiProviderNntpClient(
     List<MultiConnectionNntpClient> providers,
-    Func<bool>? useBackupProvidersForStatChecks = null
+    Func<bool, bool>? useBackupProvidersForStatChecks = null
 ) : NntpClient
 {
     public override Task ConnectAsync(string host, int port, bool useSsl, CancellationToken ct)
@@ -43,7 +44,7 @@ public class MultiProviderNntpClient(
         for (var i = 0; i < segmentIds.Count; i++) pending.Add(i);
 
         ExceptionDispatchInfo? lastException = null;
-        var orderedProviders = GetOrderedProvidersForStatCheck();
+        var orderedProviders = GetOrderedProvidersForStatCheck(cancellationToken);
         foreach (var provider in orderedProviders)
         {
             if (pending.Count == 0) break;
@@ -250,17 +251,22 @@ public class MultiProviderNntpClient(
     /// bytes, so backup/block accounts can absorb existence checks nearly for free (protocol
     /// traffic may still be metered).
     /// When the "use backup providers for health checks" setting is on, every pooled provider
-    /// plus any backup provider that opted in (STAT pipelining enabled) is first-class here,
-    /// ordered purely by free capacity so concurrent batches spread across all of them.
+    /// plus any backup provider that opted in ("Backup &amp; Health Checks" type, or STAT
+    /// pipelining enabled) is first-class here, ordered purely by free capacity so concurrent
+    /// batches spread across all of them. Backup use may be scoped to on-add checks only:
+    /// background checks are recognized by the marker context on their cancellation token.
     /// Non-eligible providers still follow, but only ever see the still-missing re-query.
     /// </summary>
-    private List<MultiConnectionNntpClient> GetOrderedProvidersForStatCheck()
+    private List<MultiConnectionNntpClient> GetOrderedProvidersForStatCheck(CancellationToken ct)
     {
-        var useBackupProviders = useBackupProvidersForStatChecks?.Invoke() ?? false;
+        var isBackgroundCheck = ct.GetContext<BackgroundHealthCheckContext>() is not null;
+        var useBackupProviders = useBackupProvidersForStatChecks?.Invoke(isBackgroundCheck) ?? false;
         var enabled = providers
             .Where(x => x.ProviderType != ProviderType.Disabled)
             .OrderByDescending(x => x.ProviderType == ProviderType.Pooled
-                                    || (useBackupProviders && x.StatPipeliningEnabled))
+                                    || (useBackupProviders
+                                        && (x.StatPipeliningEnabled
+                                            || x.ProviderType == ProviderType.BackupAndStats)))
             .ThenByDescending(x => x.AvailableConnections)
             .ToList();
 
