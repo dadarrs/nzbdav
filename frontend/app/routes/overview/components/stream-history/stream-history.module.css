@@ -1,0 +1,113 @@
+.container {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+}
+
+.header {
+    margin-bottom: 14px;
+}
+
+.title {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+}
+
+.sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 30px 0;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+}
+
+.row {
+    padding: 9px 2px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.row:first-child {
+    border-top: none;
+}
+
+.rowMain {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.fileName {
+    color: var(--text-primary);
+    font-size: 12.5px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex: 1;
+}
+
+.reason {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 1px 7px;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.reasonOk {
+    color: var(--accent-green, #7cc78f);
+    background: color-mix(in srgb, var(--accent-green, #7cc78f) 14%, transparent);
+}
+
+.reasonNeutral {
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+}
+
+.reasonWarn {
+    color: var(--accent-amber, #d9b45b);
+    background: color-mix(in srgb, var(--accent-amber, #d9b45b) 14%, transparent);
+}
+
+.reasonBad {
+    color: var(--accent-red, #d98181);
+    background: color-mix(in srgb, var(--accent-red, #d98181) 14%, transparent);
+}
+
+.failover {
+    font-size: 10.5px;
+    color: var(--accent-amber, #d9b45b);
+    flex-shrink: 0;
+}
+
+.rowMeta {
+    display: flex;
+    gap: 14px;
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.footer {
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+}

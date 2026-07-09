@@ -1,0 +1,20 @@
+declare const styles: {
+    readonly container: string;
+    readonly header: string;
+    readonly title: string;
+    readonly sub: string;
+    readonly empty: string;
+    readonly list: string;
+    readonly row: string;
+    readonly rowMain: string;
+    readonly fileName: string;
+    readonly reason: string;
+    readonly reasonOk: string;
+    readonly reasonNeutral: string;
+    readonly reasonWarn: string;
+    readonly reasonBad: string;
+    readonly failover: string;
+    readonly rowMeta: string;
+    readonly footer: string;
+};
+export default styles;

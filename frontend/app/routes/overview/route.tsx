@@ -7,6 +7,7 @@ import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, close
 import { SortableContext, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { LiveTiles } from "./components/live-tiles/live-tiles";
 import { LiveReadsPanel } from "./components/live-reads-panel/live-reads-panel";
+import { StreamHistory } from "./components/stream-history/stream-history";
 import { ActivityHeatmap } from "./components/activity-heatmap/activity-heatmap";
 import { ThroughputChart } from "./components/throughput-chart/throughput-chart";
 import { LatencyHistogram } from "./components/latency-histogram/latency-histogram";
@@ -37,6 +38,7 @@ const WINDOWS: { value: OverviewWindow, label: string }[] = [
 const DEFAULT_ROW_ORDER = [
     "liveTiles",
     "liveReads",
+    "streamHistory",
     "throughput",
     "activity",
     "latency",
@@ -122,6 +124,7 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
     const rowContent = useMemo<Record<string, ReactNode>>(() => ({
         liveTiles: <LiveTiles tiles={liveTiles} />,
         liveReads: <LiveReadsPanel />,
+        streamHistory: <StreamHistory />,
         throughput: (
             <ThroughputChart
                 points={stats.throughput}
