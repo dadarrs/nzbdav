@@ -73,16 +73,29 @@ export function LiveActiveStreams() {
                 <div className={styles.caption}>No active streams</div>
             )}
             {streams !== null && streams.length > 0 && (
-                <div className={styles.list}>
-                    {streams.map(s => (
-                        <div key={s.id} className={styles.stream}>
-                            <div className={styles.fileName}>{truncate(s.fileName, 30)}</div>
-                            <div className={styles.meta}>
-                                <span className={styles.speed}>{formatSpeed(s.speedBytesPerSec)}</span>
-                                <span className={styles.connections}>{s.activeConnections} conn</span>
-                            </div>
+                // compact summary: per-stream details live on the overview page's live-reads
+                // panel; clicking through navigates there.
+                <div
+                    className={styles.list}
+                    onClick={() => navigate("/overview")}
+                    style={{ cursor: "pointer" }}
+                    title="Open the overview page for per-stream details"
+                >
+                    <div className={styles.stream}>
+                        <div className={styles.fileName}>
+                            {streams.length === 1
+                                ? truncate(streams[0].fileName, 30)
+                                : `${streams.length} files streaming`}
                         </div>
-                    ))}
+                        <div className={styles.meta}>
+                            <span className={styles.speed}>
+                                {formatSpeed(streams.reduce((sum, s) => sum + s.speedBytesPerSec, 0))}
+                            </span>
+                            <span className={styles.connections}>
+                                {streams.reduce((sum, s) => sum + s.activeConnections, 0)} conn
+                            </span>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

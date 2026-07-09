@@ -28,11 +28,11 @@ type ReadSessionsResponse = {
     sessions: ReadSessionItem[],
 };
 
-const END_REASONS: Record<number, { label: string, className: string }> = {
-    0: { label: "completed", className: "reasonOk" },
-    1: { label: "aborted", className: "reasonNeutral" },
-    2: { label: "timeout", className: "reasonWarn" },
-    3: { label: "error", className: "reasonBad" },
+const END_REASONS: Record<number, { label: string, style: string }> = {
+    0: { label: "completed", style: styles.reasonOk },
+    1: { label: "aborted", style: styles.reasonNeutral },
+    2: { label: "timeout", style: styles.reasonWarn },
+    3: { label: "error", style: styles.reasonBad },
 };
 
 export function StreamHistory() {
@@ -96,14 +96,14 @@ export function StreamHistory() {
 }
 
 function SessionRow({ session }: { session: ReadSessionItem }) {
-    const reason = END_REASONS[session.endReason] ?? { label: "unknown", className: "reasonNeutral" };
+    const reason = END_REASONS[session.endReason] ?? { label: "unknown", style: styles.reasonNeutral };
     const served = formatBytes(session.bytesServed);
     const size = session.fileSize ? ` of ${formatBytes(session.fileSize)}` : "";
     return (
         <div className={styles.row}>
             <div className={styles.rowMain}>
                 <span className={styles.fileName} title={session.path}>{baseName(session.path)}</span>
-                <span className={`${styles.reason} ${styles[reason.className]}`}>{reason.label}</span>
+                <span className={`${styles.reason} ${reason.style}`}>{reason.label}</span>
                 {session.failoverSaves > 0 && (
                     <span
                         className={styles.failover}

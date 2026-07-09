@@ -20,6 +20,7 @@ public class MetricsRetentionService : BackgroundService
     private static readonly TimeSpan EventTtl = TimeSpan.FromDays(7);
     private static readonly TimeSpan MinuteRollupTtl = TimeSpan.FromDays(7);
     private static readonly TimeSpan SessionTtl = TimeSpan.FromDays(90);
+    private const int SessionMaxRows = 10_000;
     private static readonly TimeSpan HourlyRollupTtl = TimeSpan.FromDays(365);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -57,6 +58,12 @@ public class MetricsRetentionService : BackgroundService
                 "DELETE FROM ProviderMinutes WHERE Minute < {0}", Cutoff(nowMs, MinuteRollupTtl)).ConfigureAwait(false);
             await db.Database.ExecuteSqlRawAsync(
                 "DELETE FROM ReadSessions WHERE EndedAt < {0}", Cutoff(nowMs, SessionTtl)).ConfigureAwait(false);
+            // hard row cap on top of the TTL so a busy library can't grow stream
+            // history unboundedly within the retention window
+            await db.Database.ExecuteSqlRawAsync(
+                "DELETE FROM ReadSessions WHERE Id NOT IN " +
+                "(SELECT Id FROM ReadSessions ORDER BY EndedAt DESC LIMIT {0})",
+                SessionMaxRows).ConfigureAwait(false);
             await db.Database.ExecuteSqlRawAsync(
                 "DELETE FROM ProviderHourly WHERE Hour < {0}", Cutoff(nowMs, HourlyRollupTtl)).ConfigureAwait(false);
             await db.Database.ExecuteSqlRawAsync(

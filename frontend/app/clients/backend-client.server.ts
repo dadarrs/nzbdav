@@ -337,6 +337,9 @@ export type TestUsenetConnectionRequest = {
 
 export type HealthCheckQueueResponse = {
     uncheckedCount: number,
+    totalCount: number,
+    page: number,
+    pageSize: number,
     items: HealthCheckQueueItem[]
 }
 
@@ -352,7 +355,10 @@ export type HealthCheckQueueItem = {
 
 export type HealthCheckHistoryResponse = {
     stats: HealthCheckStats[],
-    items: HealthCheckResult[]
+    items: HealthCheckResult[],
+    totalCount: number,
+    page: number,
+    pageSize: number,
 }
 
 export type HealthCheckStats = {

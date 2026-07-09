@@ -11,7 +11,21 @@ public class GetHealthCheckQueueController(DavDatabaseClient dbClient) : BaseApi
 {
     private async Task<GetHealthCheckQueueResponse> GetHealthCheckQueue(GetHealthCheckQueueRequest request)
     {
-        var davItems = await HealthCheckService.GetHealthCheckQueueItems(dbClient)
+        var query = HealthCheckService.GetHealthCheckQueueItems(dbClient).AsQueryable();
+
+        // fuzzy-ish search: every whitespace-separated token must appear in the name
+        if (request.Search is not null)
+        {
+            foreach (var token in request.Search.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var t = token.ToLower();
+                query = query.Where(x => x.Name.ToLower().Contains(t));
+            }
+        }
+
+        var totalCount = await query.CountAsync().ConfigureAwait(false);
+        var davItems = await query
+            .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToListAsync().ConfigureAwait(false);
 
@@ -22,6 +36,9 @@ public class GetHealthCheckQueueController(DavDatabaseClient dbClient) : BaseApi
         return new GetHealthCheckQueueResponse()
         {
             UncheckedCount = uncheckedCount,
+            TotalCount = totalCount,
+            Page = request.Page,
+            PageSize = request.PageSize,
             Items = davItems.Select(x => new GetHealthCheckQueueResponse.HealthCheckQueueItem()
             {
                 Id = x.Id.ToString(),

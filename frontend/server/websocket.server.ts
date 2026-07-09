@@ -82,7 +82,9 @@ export function initializeWebsocketClient(subscriptions: Map<string, Set<WebSock
             var rawMessage = event.data.toString();
             var topicMessage = JSON.parse(rawMessage);
             var [topic, message] = [topicMessage.Topic, topicMessage.Message];
-            if (!topic || !message) return;
+            // empty string is a legitimate state ("no active streams") -- only drop
+            // messages that carry no topic or a missing message field entirely.
+            if (!topic || message == null) return;
             lastMessage.set(topic, rawMessage);
             var subscribed = subscriptions.get(topic) || [];
             subscribed.forEach(client => {

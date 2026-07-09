@@ -19,5 +19,20 @@ public class GetHealthCheckHistoryRequest
             if (!isValidStartParam) throw new BadHttpRequestException("Invalid pageSize parameter");
             PageSize = pageSize;
         }
+
+        var pageParam = context.GetQueryParam("page");
+        if (pageParam is not null)
+        {
+            var isValidPageParam = int.TryParse(pageParam, out int page);
+            if (!isValidPageParam || page < 1) throw new BadHttpRequestException("Invalid page parameter");
+            Page = page;
+        }
+
+        var searchParam = context.GetQueryParam("search");
+        if (!string.IsNullOrWhiteSpace(searchParam))
+            Search = searchParam.Trim();
     }
+
+    public int Page { get; init; } = 1;
+    public string? Search { get; init; }
 }
