@@ -13,7 +13,8 @@ public class DatabaseStoreNzbFile(
     HttpContext httpContext,
     DavDatabaseClient dbClient,
     INntpClient usenetClient,
-    ConfigManager configManager
+    ConfigManager configManager,
+    ActiveStreamTracker activeStreamTracker
 ) : BaseStoreStreamFile(httpContext)
 {
     public DavItem DavItem => davNzbFile;
@@ -28,14 +29,26 @@ public class DatabaseStoreNzbFile(
         // store the DavItem being accessed in the http context
         httpContext.Items["DavItem"] = davNzbFile;
 
+        // register active stream and deregister when the response completes
+        var streamInfo = activeStreamTracker.Register(davNzbFile.Name);
+        httpContext.Items["ActiveStreamInfo"] = streamInfo;
+        if (streamInfo != null)
+        {
+            httpContext.Response.OnCompleted(() =>
+            {
+                activeStreamTracker.Deregister(streamInfo.Id);
+                return Task.CompletedTask;
+            });
+        }
+
         var id = davNzbFile.Id;
         var file = await dbClient.GetDavNzbFileAsync(davNzbFile, cancellationToken).ConfigureAwait(false);
         if (file is null) throw new FileNotFoundException($"Could not find nzb file with id: {id}");
-        return GetStream(file);
+        return GetStream(file, streamInfo);
     }
 
-    private NzbFileStream GetStream(DavNzbFile nzbFile)
+    private NzbFileStream GetStream(DavNzbFile nzbFile, ActiveStreamInfo? streamInfo)
     {
-        return usenetClient.GetFileStream(nzbFile.SegmentIds, FileSize, configManager.GetArticleBufferSize());
+        return new NzbFileStream(nzbFile.SegmentIds, FileSize, usenetClient, configManager.GetArticleBufferSize(), streamInfo);
     }
 }

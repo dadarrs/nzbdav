@@ -7,6 +7,7 @@ using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Queue;
+using NzbWebDAV.Streams;
 using NzbWebDAV.WebDav.Base;
 using NzbWebDAV.WebDav.Requests;
 using NzbWebDAV.Websocket;
@@ -20,7 +21,8 @@ public class DatabaseStoreCollection(
     ConfigManager configManager,
     UsenetStreamingClient usenetClient,
     QueueManager queueManager,
-    WebsocketManager websocketManager
+    WebsocketManager websocketManager,
+    ActiveStreamTracker activeStreamTracker
 ) : BaseStoreReadonlyCollection
 {
     public override string Name => davDirectory.Name;
@@ -126,25 +128,25 @@ public class DatabaseStoreCollection(
         {
             DavItem.ItemSubType.IdsRoot =>
                 new DatabaseStoreIdsCollection(
-                    davItem.Name, "", httpContext, dbClient, usenetClient, configManager),
+                    davItem.Name, "", httpContext, dbClient, usenetClient, configManager, activeStreamTracker),
             DavItem.ItemSubType.NzbsRoot =>
                 new DatabaseStoreWatchFolder(
                     davItem, httpContext, dbClient, configManager, usenetClient, queueManager, websocketManager),
             DavItem.ItemSubType.Directory or DavItem.ItemSubType.ContentRoot  =>
                 new DatabaseStoreCollection(
-                    davItem, httpContext, dbClient, configManager, usenetClient, queueManager, websocketManager),
+                    davItem, httpContext, dbClient, configManager, usenetClient, queueManager, websocketManager, activeStreamTracker),
             DavItem.ItemSubType.SymlinkRoot =>
                 new DatabaseStoreSymlinkCollection(
                     davItem, dbClient, configManager),
             DavItem.ItemSubType.NzbFile =>
                 new DatabaseStoreNzbFile(
-                    davItem, httpContext, dbClient, usenetClient, configManager),
+                    davItem, httpContext, dbClient, usenetClient, configManager, activeStreamTracker),
             DavItem.ItemSubType.RarFile =>
                 new DatabaseStoreRarFile(
-                    davItem, httpContext, dbClient, usenetClient, configManager),
+                    davItem, httpContext, dbClient, usenetClient, configManager, activeStreamTracker),
             DavItem.ItemSubType.MultipartFile =>
                 new DatabaseStoreMultipartFile(
-                    davItem, httpContext, dbClient, usenetClient, configManager),
+                    davItem, httpContext, dbClient, usenetClient, configManager, activeStreamTracker),
             _ => throw new ArgumentException("Unrecognized directory child type.")
         };
     }

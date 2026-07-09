@@ -14,7 +14,8 @@ public class DatabaseStoreRarFile(
     HttpContext httpContext,
     DavDatabaseClient dbClient,
     UsenetStreamingClient usenetClient,
-    ConfigManager configManager
+    ConfigManager configManager,
+    ActiveStreamTracker activeStreamTracker
 ) : BaseStoreStreamFile(httpContext)
 {
     public DavItem DavItem => davRarFile;
@@ -29,19 +30,32 @@ public class DatabaseStoreRarFile(
         // store the DavItem being accessed in the http context
         httpContext.Items["DavItem"] = davRarFile;
 
+        // register active stream and deregister when the response completes
+        var streamInfo = activeStreamTracker.Register(davRarFile.Name);
+        httpContext.Items["ActiveStreamInfo"] = streamInfo;
+        if (streamInfo != null)
+        {
+            httpContext.Response.OnCompleted(() =>
+            {
+                activeStreamTracker.Deregister(streamInfo.Id);
+                return Task.CompletedTask;
+            });
+        }
+
         var id = davRarFile.Id;
         var rarFile = await dbClient.GetDavRarFileAsync(davRarFile, ct).ConfigureAwait(false);
         if (rarFile is null) throw new FileNotFoundException($"Could not find nzb file with id: {id}");
-        return GetStream(rarFile);
+        return GetStream(rarFile, streamInfo);
     }
 
-    private DavMultipartFileStream GetStream(DavRarFile rarFile)
+    private DavMultipartFileStream GetStream(DavRarFile rarFile, ActiveStreamInfo? streamInfo)
     {
         return new DavMultipartFileStream
         (
             rarFile.ToDavMultipartFileMeta().FileParts,
             usenetClient,
-            configManager.GetArticleBufferSize()
+            configManager.GetArticleBufferSize(),
+            streamInfo
         );
     }
 }

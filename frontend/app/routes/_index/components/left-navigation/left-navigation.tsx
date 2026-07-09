@@ -3,13 +3,15 @@ import styles from "./left-navigation.module.css";
 import { className } from "~/utils/styling";
 import type React from "react";
 import { LiveUsenetConnections } from "../live-usenet-connections/live-usenet-connections";
+import { LiveActiveStreams } from "../live-active-streams/live-active-streams";
 
 export type LeftNavigationProps = {
     version?: string,
     isFrontendAuthDisabled?: boolean,
+    isActiveStreamTrackerEnabled?: boolean,
 }
 
-export function LeftNavigation({ version, isFrontendAuthDisabled }: LeftNavigationProps) {
+export function LeftNavigation({ version, isFrontendAuthDisabled, isActiveStreamTrackerEnabled }: LeftNavigationProps) {
     return (
         <div className={styles.container}>
             <Item target="/queue">
@@ -33,6 +35,7 @@ export function LeftNavigation({ version, isFrontendAuthDisabled }: LeftNavigati
                 <div className={styles.title}>Settings</div>
             </Item>
             <LiveUsenetConnections />
+            {isActiveStreamTrackerEnabled !== false && <LiveActiveStreams />}
 
             <div className={styles.footer}>
                 <div className={styles["footer-item"]}>
