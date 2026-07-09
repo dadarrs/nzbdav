@@ -1,9 +1,13 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using NWebDav.Server;
 using NWebDav.Server.Handlers;
 using NWebDav.Server.Helpers;
 using NWebDav.Server.Props;
 using NWebDav.Server.Stores;
+using NzbWebDAV.Clients.Usenet;
+using NzbWebDAV.Database.Models;
+using NzbWebDAV.Services;
 using NzbWebDAV.Streams;
 
 namespace NzbWebDAV.WebDav.Base;
@@ -153,7 +157,28 @@ public class GetAndHeadHandlerPatch : IRequestHandler
                 if (!isHeadRequest)
                 {
                     var streamInfo = httpContext.Items.TryGetValue("ActiveStreamInfo", out var si) ? si as ActiveStreamInfo : null;
-                    await CopyToAsync(stream, response.Body, range?.Start ?? 0, range?.End, httpContext.RequestAborted, streamInfo).ConfigureAwait(false);
+
+                    // Register a read session for usenet-file reads so the overview page can
+                    // show live reads and attribute segment fetches to this request.
+                    ActiveReadRegistry? readRegistry = null;
+                    Guid? readSessionId = null;
+                    if (httpContext.Items["DavItem"] is DavItem davItem)
+                    {
+                        readRegistry = httpContext.RequestServices.GetService<ActiveReadRegistry>();
+                        if (readRegistry != null)
+                        {
+                            var clientKey = $"{httpContext.Connection.RemoteIpAddress}|{request.Headers.UserAgent}";
+                            var fileSize = stream.CanSeek ? stream.Length : (long?)null;
+                            readSessionId = readRegistry.GetOrCreate(davItem.Path, clientKey, davItem.Name, fileSize);
+                        }
+                    }
+
+                    using var readScope = readSessionId != null
+                        ? MultiProviderNntpClient.BeginReadSessionScope(readSessionId.Value)
+                        : null;
+                    await CopyToAsync(stream, response.Body, range?.Start ?? 0, range?.End, httpContext.RequestAborted,
+                            streamInfo, readRegistry, readSessionId)
+                        .ConfigureAwait(false);
                 }
             }
             else
@@ -165,7 +190,8 @@ public class GetAndHeadHandlerPatch : IRequestHandler
         return true;
     }
 
-    private async Task CopyToAsync(Stream src, Stream dest, long start, long? end, CancellationToken cancellationToken, ActiveStreamInfo? streamInfo = null)
+    private async Task CopyToAsync(Stream src, Stream dest, long start, long? end, CancellationToken cancellationToken,
+        ActiveStreamInfo? streamInfo = null, ActiveReadRegistry? readRegistry = null, Guid? readSessionId = null)
     {
         // Skip to the first offset
         if (start > 0)
@@ -197,6 +223,8 @@ public class GetAndHeadHandlerPatch : IRequestHandler
             // Write the data to the destination stream
             await dest.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
             streamInfo?.AddBytes(bytesRead);
+            if (readRegistry != null && readSessionId != null)
+                readRegistry.Touch(readSessionId.Value, bytesRead);
 
             // Decrement the number of bytes left to read
             bytesToRead -= bytesRead;

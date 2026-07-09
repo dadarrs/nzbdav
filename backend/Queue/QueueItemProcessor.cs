@@ -36,6 +36,8 @@ public class QueueItemProcessor(
     {
         // initialize
         var startTime = DateTime.Now;
+        // tag this async flow so per-provider metrics attribute segment fetches to this item
+        using var usageScope = ProviderUsageTracker.BeginScope(queueItem.Id);
         _ = websocketManager.SendMessage(WebsocketTopic.QueueItemStatus, $"{queueItem.Id}|Downloading");
 
         // process the job

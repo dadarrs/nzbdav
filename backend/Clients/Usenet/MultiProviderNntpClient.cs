@@ -1,8 +1,13 @@
-﻿using System.Runtime.ExceptionServices;
+﻿using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using NzbWebDAV.Clients.Usenet.Contexts;
 using NzbWebDAV.Clients.Usenet.Models;
+using NzbWebDAV.Database.Models.Metrics;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Models;
+using NzbWebDAV.Services;
+using NzbWebDAV.Services.Metrics;
+using NzbWebDAV.Streams;
 using Serilog;
 using UsenetSharp.Models;
 
@@ -10,9 +15,30 @@ namespace NzbWebDAV.Clients.Usenet;
 
 public class MultiProviderNntpClient(
     List<MultiConnectionNntpClient> providers,
-    Func<bool, bool>? useBackupProvidersForStatChecks = null
+    Func<bool, bool>? useBackupProvidersForStatChecks = null,
+    MetricsWriter? metricsWriter = null,
+    ProviderBytesTracker? bytesTracker = null,
+    ProviderUsageTracker? usageTracker = null
 ) : NntpClient
 {
+    /// <summary>
+    /// Tags the current async flow with a read-session id so SegmentFetch metric rows can be
+    /// attributed to the WebDAV read that caused them. Set around the GET handler's copy loop.
+    /// </summary>
+    private static readonly AsyncLocal<Guid?> ReadSessionScope = new();
+
+    public static IDisposable BeginReadSessionScope(Guid readSessionId)
+    {
+        var previous = ReadSessionScope.Value;
+        ReadSessionScope.Value = readSessionId;
+        return new ScopeReleaser(() => ReadSessionScope.Value = previous);
+    }
+
+    private sealed class ScopeReleaser(Action onDispose) : IDisposable
+    {
+        public void Dispose() => onDispose();
+    }
+
     public override Task ConnectAsync(string host, int port, bool useSsl, CancellationToken ct)
     {
         throw new NotSupportedException("Please connect within the connectionFactory");
@@ -199,6 +225,7 @@ public class MultiProviderNntpClient(
     ) where T : UsenetResponse
     {
         ExceptionDispatchInfo? lastException = null;
+        List<(string Host, SegmentFetch.FetchStatus Reason)>? priorMisses = null;
         var orderedProviders = GetOrderedProviders();
         for (var i = 0; i < orderedProviders.Count; i++)
         {
@@ -212,24 +239,104 @@ public class MultiProviderNntpClient(
                 Log.Debug($"Encountered error during NNTP Operation: `{msg}`. Trying another provider.");
             }
 
+            var stopwatch = Stopwatch.StartNew();
             try
             {
                 var result = await task.Invoke(provider).ConfigureAwait(false);
 
                 // if no article with that message-id is found, try again with the next provider.
-                if (!isLastProvider && result.ResponseType == UsenetResponseType.NoArticleWithThatMessageId)
-                    continue;
+                if (result.ResponseType == UsenetResponseType.NoArticleWithThatMessageId)
+                {
+                    RecordFetch(provider.Host, SegmentFetch.FetchStatus.Missing, stopwatch.ElapsedMilliseconds, i);
+                    if (!isLastProvider)
+                    {
+                        (priorMisses ??= []).Add((provider.Host, SegmentFetch.FetchStatus.Missing));
+                        continue;
+                    }
 
-                return result;
+                    return result;
+                }
+
+                RecordFetch(provider.Host, SegmentFetch.FetchStatus.Ok, stopwatch.ElapsedMilliseconds, i);
+                usageTracker?.RecordSuccess(provider.Host);
+                if (priorMisses is { Count: > 0 })
+                {
+                    // A later provider rescued a segment the earlier ones missed/failed.
+                    usageTracker?.RecordFailoverSave();
+                    RecordFailoverMisses(priorMisses, rescuer: provider.Host);
+                }
+
+                return WrapCounting(result, provider.Host);
             }
             catch (Exception e) when (!e.IsCancellationException())
             {
+                var reason = ClassifyException(e);
+                RecordFetch(provider.Host, reason, stopwatch.ElapsedMilliseconds, i);
+                (priorMisses ??= []).Add((provider.Host, reason));
                 lastException = ExceptionDispatchInfo.Capture(e);
             }
         }
 
         lastException?.Throw();
         throw new Exception("There are no usenet providers configured.");
+    }
+
+    /// <summary>
+    /// Wraps decoded body/article streams so every byte read is attributed to the provider that
+    /// served it (feeds per-provider volume, data caps and throughput on the overview page).
+    /// </summary>
+    private T WrapCounting<T>(T result, string host) where T : UsenetResponse
+    {
+        if (bytesTracker == null) return result;
+        return result switch
+        {
+            UsenetDecodedBodyResponse b =>
+                (T)(object)(b with { Stream = new CountingYencStream(b.Stream, bytesTracker, host) }),
+            UsenetDecodedArticleResponse a =>
+                (T)(object)(a with { Stream = new CountingYencStream(a.Stream, bytesTracker, host) }),
+            _ => result,
+        };
+    }
+
+    private void RecordFetch(string host, SegmentFetch.FetchStatus status, long durationMs, int retries)
+    {
+        metricsWriter?.RecordFetch(new SegmentFetch
+        {
+            At = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            Provider = host,
+            ReadSessionId = ReadSessionScope.Value,
+            QueueItemId = ProviderUsageTracker.CurrentScopeId,
+            Bytes = 0, // bytes flow lazily through CountingYencStream -> ProviderBytesTracker
+            DurationMs = (int)Math.Min(durationMs, int.MaxValue),
+            Status = status,
+            Retries = retries,
+        });
+    }
+
+    private void RecordFailoverMisses(
+        List<(string Host, SegmentFetch.FetchStatus Reason)> priorMisses,
+        string rescuer)
+    {
+        if (metricsWriter == null) return;
+        var at = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        foreach (var miss in priorMisses)
+        {
+            metricsWriter.RecordFailoverMiss(new FailoverMiss
+            {
+                At = at,
+                FromProvider = miss.Host,
+                ToProvider = rescuer,
+                Reason = miss.Reason,
+            });
+        }
+    }
+
+    private static SegmentFetch.FetchStatus ClassifyException(Exception ex)
+    {
+        if (ex is TimeoutException) return SegmentFetch.FetchStatus.Timeout;
+        if (ex is UnauthorizedAccessException) return SegmentFetch.FetchStatus.Auth;
+        if (ex is IOException or System.Net.Sockets.SocketException) return SegmentFetch.FetchStatus.Network;
+        return SegmentFetch.FetchStatus.Other;
     }
 
     private List<MultiConnectionNntpClient> GetOrderedProviders()

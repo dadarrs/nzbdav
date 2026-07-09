@@ -13,12 +13,16 @@ public class ProviderUsageTracker(ActiveReadRegistry? activeReadRegistry = null)
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, long>> _usage = new();
     private readonly ConcurrentDictionary<Guid, long> _failoverSaves = new();
 
-    public IDisposable BeginScope(Guid queueItemId)
+    // Static: the scope rides an AsyncLocal, so callers that only tag a flow (e.g. the queue
+    // processor) don't need the singleton instance injected.
+    public static IDisposable BeginScope(Guid queueItemId)
     {
         var previous = CurrentScope.Value;
         CurrentScope.Value = queueItemId;
         return new Releaser(() => CurrentScope.Value = previous);
     }
+
+    public static Guid? CurrentScopeId => CurrentScope.Value;
 
     public void RecordSuccess(string providerHost)
     {
