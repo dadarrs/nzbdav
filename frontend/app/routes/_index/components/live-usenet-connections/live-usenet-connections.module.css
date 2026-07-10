@@ -15,7 +15,7 @@
 }
 
 .max {
-    background-color: #93a1a1;
+    background-color: var(--text-secondary);
     opacity: 0.25;
     position: absolute;
     height: 100%;
@@ -23,7 +23,7 @@
 }
 
 .live {
-    background-color: green;
+    background-color: var(--success);
     position: absolute;
     height: 100%;
     width: 0%;
@@ -31,7 +31,7 @@
 }
 
 .active {
-    background-color: blue;
+    background-color: var(--accent);
     position: absolute;
     height: 100%;
     width: 0%;

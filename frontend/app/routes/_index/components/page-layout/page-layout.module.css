@@ -1,5 +1,5 @@
 .container {
-    color: white;
+    color: var(--text-primary);
     font-family: helvetica;
     max-width: 100%;
     min-width: 100%;

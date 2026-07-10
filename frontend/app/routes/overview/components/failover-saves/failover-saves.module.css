@@ -279,11 +279,11 @@
     display: block;
     height: 100%;
     border-radius: 4px;
-    background: linear-gradient(to right, rgba(52, 211, 153, 0.55), var(--success));
+    background: linear-gradient(to right, color-mix(in srgb, var(--success) 55%, transparent), var(--success));
 }
 
 .barFillBad {
-    background: linear-gradient(to right, rgba(248, 113, 113, 0.5), var(--danger-muted));
+    background: linear-gradient(to right, color-mix(in srgb, var(--danger-muted) 50%, transparent), var(--danger-muted));
 }
 
 .count {
@@ -385,13 +385,13 @@
 }
 
 .trendGrid {
-    stroke: rgba(255, 255, 255, 0.05);
+    stroke: var(--border-subtle);
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
 }
 
 .trendFill {
-    fill: rgba(52, 211, 153, 0.1);
+    fill: color-mix(in srgb, var(--success) 10%, transparent);
     stroke: none;
 }
 
@@ -408,7 +408,7 @@
     top: 0;
     bottom: 0;
     width: 1px;
-    background: rgba(255, 255, 255, 0.25);
+    background: var(--border-strong);
     pointer-events: none;
     transform: translateX(-0.5px);
 }

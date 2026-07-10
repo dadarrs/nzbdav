@@ -20,10 +20,10 @@
   --bg-surface-2: hsl(195, 45%, 13%);
   --bg-hover: rgba(255, 255, 255, 0.04);
 
-  /* borders */
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-default: rgba(255, 255, 255, 0.12);
-  --border-strong: rgba(255, 255, 255, 0.18);
+  /* borders (midnight: cool blue-tinted) */
+  --border-subtle: rgba(148, 191, 255, 0.09);
+  --border-default: rgba(148, 191, 255, 0.15);
+  --border-strong: rgba(148, 191, 255, 0.24);
 
   /* text */
   --text-primary: #ffffff;
@@ -86,9 +86,10 @@
   --bg-surface: hsl(220, 12%, 17%);
   --bg-surface-2: hsl(220, 11%, 22%);
   --bg-hover: rgba(255, 255, 255, 0.05);
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-default: rgba(255, 255, 255, 0.13);
-  --border-strong: rgba(255, 255, 255, 0.20);
+  /* warm-tinted borders (~30 deg hue) so the charcoal reads warm, not neutral */
+  --border-subtle: rgba(255, 199, 148, 0.10);
+  --border-default: rgba(255, 199, 148, 0.16);
+  --border-strong: rgba(255, 199, 148, 0.25);
   --text-primary: hsl(30, 20%, 96%);
   --text-secondary: hsl(28, 12%, 72%);
   --text-muted: hsl(28, 10%, 56%);
@@ -138,9 +139,10 @@
   --bg-surface: hsl(0, 0%, 13%);
   --bg-surface-2: hsl(0, 0%, 18%);
   --bg-hover: rgba(255, 255, 255, 0.05);
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-default: rgba(255, 255, 255, 0.13);
-  --border-strong: rgba(255, 255, 255, 0.20);
+  /* crisp pure-neutral borders, slightly stronger for the OLED look */
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-default: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.26);
   --text-primary: #f2f2f2;
   --text-secondary: #b8b8b8;
   --text-muted: #8a8a8a;
@@ -174,4 +176,107 @@ html, body {
 .modal {
   --bs-modal-margin: 20px !important;
   --bs-modal-bg: var(--modal-background-color);
+}
+
+/*
+ * Bootstrap wiring.
+ *
+ * Map bootstrap's own design tokens onto the theme tokens so react-bootstrap
+ * components (forms, tables, cards, accordions, dropdowns, modals) pick up
+ * each theme's surfaces and text automatically. html[data-bs-theme] wins over
+ * bootstrap's :root / [data-bs-theme=dark] blocks by specificity + order.
+ */
+html[data-bs-theme] {
+  --bs-body-bg: var(--bg-base);
+  --bs-body-color: var(--text-primary);
+  --bs-emphasis-color: var(--text-primary);
+  --bs-secondary-color: var(--text-secondary);
+  --bs-tertiary-color: var(--text-muted);
+  --bs-secondary-bg: var(--bg-surface-2);
+  --bs-tertiary-bg: var(--bg-surface);
+  --bs-border-color: var(--border-default);
+  --bs-border-color-translucent: var(--border-subtle);
+}
+
+/* Primary buttons take the theme accent everywhere. */
+.btn-primary {
+  --bs-btn-color: var(--accent-contrast);
+  --bs-btn-bg: var(--accent);
+  --bs-btn-border-color: var(--accent);
+  --bs-btn-hover-color: var(--accent-contrast);
+  --bs-btn-hover-bg: color-mix(in srgb, var(--accent) 85%, var(--text-primary));
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--accent) 85%, var(--text-primary));
+  --bs-btn-active-color: var(--accent-contrast);
+  --bs-btn-active-bg: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
+  --bs-btn-active-border-color: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
+  --bs-btn-disabled-color: var(--accent-contrast);
+  --bs-btn-disabled-bg: var(--accent);
+  --bs-btn-disabled-border-color: var(--accent);
+}
+
+.btn-primary:focus-visible,
+.btn-check:focus-visible + .btn-primary,
+.btn-primary:active:focus-visible {
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Checkboxes, radios, switches. */
+.form-check-input:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.form-check-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border-default));
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* Text inputs / selects: accent focus ring instead of bootstrap blue. */
+.form-control:focus,
+.form-select:focus {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--bg-surface));
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* Range sliders. */
+.form-range::-webkit-slider-thumb {
+  background-color: var(--accent);
+}
+.form-range::-moz-range-thumb {
+  background-color: var(--accent);
+}
+.form-range::-webkit-slider-thumb:active {
+  background-color: color-mix(in srgb, var(--accent) 70%, var(--bg-base));
+}
+.form-range::-moz-range-thumb:active {
+  background-color: color-mix(in srgb, var(--accent) 70%, var(--bg-base));
+}
+.form-range:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px var(--bg-base), 0 0 0 0.25rem color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.form-range:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 1px var(--bg-base), 0 0 0 0.25rem color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/*
+ * Plain content links take the accent. :where() keeps specificity at 0-0-1 so
+ * bootstrap's `a` rule loses by order while any classed link style (nav items,
+ * css-module links, button-styled anchors) still wins.
+ */
+a:where(:not(.btn):not(.nav-link):not(.dropdown-item):not(.page-link):not(.navbar-brand)) {
+  color: var(--accent);
+}
+a:where(:not(.btn):not(.nav-link):not(.dropdown-item):not(.page-link):not(.navbar-brand)):where(:hover) {
+  color: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
+}
+
+/* Tabs (settings page) read the token layer instead of bootstrap's palette. */
+.nav-tabs {
+  --bs-nav-tabs-border-color: var(--border-default);
+  --bs-nav-tabs-link-hover-border-color: var(--border-subtle) var(--border-subtle) var(--border-default);
+  --bs-nav-tabs-link-active-color: var(--text-primary);
+  --bs-nav-tabs-link-active-bg: var(--bg-surface);
+  --bs-nav-tabs-link-active-border-color: var(--border-default) var(--border-default) transparent;
+  --bs-nav-link-color: var(--text-secondary);
+  --bs-nav-link-hover-color: var(--text-primary);
 }

@@ -95,7 +95,7 @@
 }
 
 .gridline {
-    stroke: rgba(255, 255, 255, 0.05);
+    stroke: var(--border-subtle);
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
 }
@@ -119,7 +119,7 @@
     top: 0;
     bottom: 0;
     width: 1px;
-    background: rgba(255, 255, 255, 0.25);
+    background: var(--border-strong);
     pointer-events: none;
     transform: translateX(-0.5px);
 }

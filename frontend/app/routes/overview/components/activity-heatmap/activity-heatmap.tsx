@@ -312,8 +312,8 @@ function emptyMessageFor(mode: HeatmapMode): string {
 }
 
 function cellColor(intensity: number): string {
-    if (intensity <= 0) return "rgba(255,255,255,0.04)";
+    if (intensity <= 0) return "var(--bg-hover)";
     const eased = Math.pow(Math.min(1, intensity), 0.6);
     const alpha = 0.15 + eased * 0.75;
-    return `rgba(52, 211, 153, ${alpha.toFixed(3)})`;
+    return `color-mix(in srgb, var(--success) ${Math.round(alpha * 100)}%, transparent)`;
 }

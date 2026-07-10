@@ -18,21 +18,21 @@
     flex-direction: column;
     text-align: left;
     padding: 0;
-    background: var(--bg-elevated, #10222b);
-    border: 1px solid var(--border-default, rgba(255, 255, 255, 0.12));
-    border-radius: var(--radius-md, 10px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
     overflow: hidden;
     cursor: pointer;
     transition: border-color 0.12s ease, transform 0.12s ease;
 }
 
 .card:hover {
-    border-color: var(--border-strong, rgba(255, 255, 255, 0.24));
+    border-color: var(--border-strong);
 }
 
 .cardSelected {
-    border-color: var(--accent, #4db8ff);
-    box-shadow: 0 0 0 1px var(--accent, #4db8ff);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
 }
 
 .swatch {
@@ -79,15 +79,15 @@
     justify-content: space-between;
     font-size: 14px;
     font-weight: 600;
-    color: var(--text-primary, #fff);
+    color: var(--text-primary);
 }
 
 .check {
-    color: var(--accent, #4db8ff);
+    color: var(--accent);
 }
 
 .cardDesc {
     margin-top: 2px;
     font-size: 12px;
-    color: var(--text-muted, #6f8289);
+    color: var(--text-muted);
 }

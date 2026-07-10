@@ -3,9 +3,9 @@
 }
 
 .task {
-    background-color: #02181d;
+    background-color: var(--bg-elevated);
     padding: 5px;
-    color: #dee2e6;
+    color: var(--text-primary);
 }
 
 .alert {

@@ -51,17 +51,17 @@ export function HealthStats({ stats }: HealthStatsProps) {
                 </div>
 
                 <div className={styles.statCard}>
-                    <div className={styles.statNumber} style={{ color: '#198754' }}>{healthy}</div>
+                    <div className={styles.statNumber} style={{ color: 'var(--success)' }}>{healthy}</div>
                     <div className={styles.statLabel}>Healthy ({getPercentage(healthy)}%)</div>
                 </div>
 
                 <div className={styles.statCard}>
-                    <div className={styles.statNumber} style={{ color: '#17a2b8' }}>{repaired}</div>
+                    <div className={styles.statNumber} style={{ color: 'var(--accent)' }}>{repaired}</div>
                     <div className={styles.statLabel}>Repaired ({getPercentage(repaired)}%)</div>
                 </div>
 
                 <div className={styles.statCard}>
-                    <div className={styles.statNumber} style={{ color: '#dc3545' }}>{deleted}</div>
+                    <div className={styles.statNumber} style={{ color: 'var(--danger)' }}>{deleted}</div>
                     <div className={styles.statLabel}>Deleted ({getPercentage(deleted)}%)</div>
                 </div>
             </div>
