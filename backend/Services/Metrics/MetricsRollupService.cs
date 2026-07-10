@@ -68,6 +68,7 @@ public class MetricsRollupService(ProviderBytesTracker bytesTracker) : Backgroun
         // so re-runs (catch-up after restart) are idempotent: any closed minute
         // contributes at most once because DrainClosed pops the bucket.
         await ApplyByteCountersAsync(db, currentMinute).ConfigureAwait(false);
+        await ApplyHealthCountersAsync(db, currentMinute).ConfigureAwait(false);
     }
 
     private async Task ApplyByteCountersAsync(MetricsDbContext db, long currentMinute)
@@ -107,6 +108,43 @@ public class MetricsRollupService(ProviderBytesTracker bytesTracker) : Backgroun
                     BytesFetched = ThroughputMinutes.BytesFetched + excluded.BytesFetched;
                 """,
                 minute, bytes).ConfigureAwait(false);
+        }
+    }
+
+    // Same upsert-add pattern as ApplyByteCountersAsync, for STAT health-check protocol
+    // bytes. The health columns are owned exclusively by this method: the minute/hour
+    // re-roll upserts never touch them, so catch-up re-runs stay idempotent.
+    private async Task ApplyHealthCountersAsync(MetricsDbContext db, long currentMinute)
+    {
+        var drained = bytesTracker.DrainClosedHealth(currentMinute);
+        if (drained.Count == 0) return;
+
+        foreach (var (minute, host, onAddBytes, backgroundBytes) in drained)
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO ProviderMinutes
+                    (Minute, Provider, Articles, BytesFetched, Errors, Retries, SumDurationMs, Hist,
+                     HealthBytesOnAdd, HealthBytesBackground)
+                VALUES ({0}, {1}, 0, 0, 0, 0, 0, NULL, {2}, {3})
+                ON CONFLICT(Minute, Provider) DO UPDATE SET
+                    HealthBytesOnAdd = ProviderMinutes.HealthBytesOnAdd + excluded.HealthBytesOnAdd,
+                    HealthBytesBackground = ProviderMinutes.HealthBytesBackground + excluded.HealthBytesBackground;
+                """,
+                minute, host, onAddBytes, backgroundBytes).ConfigureAwait(false);
+
+            var hour = FloorTo(minute, OneHour);
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO ProviderHourly
+                    (Hour, Provider, Articles, BytesFetched, Errors, Retries, SumDurationMs, P95DurationMs,
+                     HealthBytesOnAdd, HealthBytesBackground)
+                VALUES ({0}, {1}, 0, 0, 0, 0, 0, NULL, {2}, {3})
+                ON CONFLICT(Hour, Provider) DO UPDATE SET
+                    HealthBytesOnAdd = ProviderHourly.HealthBytesOnAdd + excluded.HealthBytesOnAdd,
+                    HealthBytesBackground = ProviderHourly.HealthBytesBackground + excluded.HealthBytesBackground;
+                """,
+                hour, host, onAddBytes, backgroundBytes).ConfigureAwait(false);
         }
     }
 

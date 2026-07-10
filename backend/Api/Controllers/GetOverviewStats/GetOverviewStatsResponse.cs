@@ -49,6 +49,11 @@ public class GetOverviewStatsResponse
         public double AvgDurationMs { get; init; }
         public double ErrorRate { get; init; }
         public List<long> Spark { get; init; } = new();
+
+        // STAT health-check protocol traffic attributed to this provider (settable:
+        // stitched onto the row after the main aggregation).
+        public long HealthBytesOnAdd { get; set; }
+        public long HealthBytesBackground { get; set; }
     }
 
     public class CatalogueBlock
@@ -148,6 +153,8 @@ public class GetOverviewStatsResponse
         public long ReadSessions { get; init; }
         public long ReadSeconds { get; init; }
         public long? FirstSeenAt { get; init; }
+        public long HealthBytesOnAdd { get; init; }
+        public long HealthBytesBackground { get; init; }
     }
 
     /// <summary>

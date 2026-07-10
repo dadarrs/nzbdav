@@ -9,6 +9,8 @@ export type LifetimeBlockProps = {
         readSessions: number,
         readSeconds: number,
         firstSeenAt: number | null,
+        healthBytesOnAdd: number,
+        healthBytesBackground: number,
     },
 };
 
@@ -30,15 +32,20 @@ export function LifetimeBlock({ lifetime }: LifetimeBlockProps) {
                     <Tile label="Articles" value={formatNumber(lifetime.articles)} />
                     <Tile label="Read sessions" value={formatNumber(lifetime.readSessions)} />
                     <Tile label="Active-reads time" value={formatHours(lifetime.readSeconds)} />
+                    <Tile
+                        label="Health checks"
+                        value={formatBytes(lifetime.healthBytesOnAdd + lifetime.healthBytesBackground)}
+                        title={`STAT protocol traffic — on-add: ${formatBytes(lifetime.healthBytesOnAdd)} · background: ${formatBytes(lifetime.healthBytesBackground)}`}
+                    />
                 </div>
             )}
         </div>
     );
 }
 
-function Tile({ label, value }: { label: string, value: string }) {
+function Tile({ label, value, title }: { label: string, value: string, title?: string }) {
     return (
-        <div className={styles.cell}>
+        <div className={styles.cell} title={title}>
             <div className={styles.label}>{label}</div>
             <div className={styles.value}>{value}</div>
         </div>

@@ -32,6 +32,42 @@ public sealed class ProviderBytesTracker
         Interlocked.Add(ref _lifetimeAll, bytes);
     }
 
+    // STAT health-check protocol bytes, bucketed like Add() but kept separate so the
+    // dashboard can show what health checking costs each provider (on byte-metered
+    // blocks this traffic counts against the quota). Key includes whether the check
+    // ran in the background repair job or during an import.
+    private readonly ConcurrentDictionary<(long Minute, string Host, bool Background), long> _healthBuckets = new();
+
+    public void AddHealthBytes(string host, long bytes, bool background)
+    {
+        if (bytes <= 0 || string.IsNullOrEmpty(host)) return;
+        var minute = NowMinute();
+        _healthBuckets.AddOrUpdate((minute, host, background), bytes, (_, prev) => prev + bytes);
+    }
+
+    /// <summary>
+    /// Pop all health buckets whose minute is strictly older than the cutoff,
+    /// aggregated to (minute, host) with the on-add/background split.
+    /// </summary>
+    public List<(long Minute, string Host, long OnAddBytes, long BackgroundBytes)> DrainClosedHealth(long cutoffMinute)
+    {
+        var aggregated = new Dictionary<(long, string), (long OnAdd, long Background)>();
+        foreach (var key in _healthBuckets.Keys)
+        {
+            if (key.Minute >= cutoffMinute) continue;
+            if (!_healthBuckets.TryRemove(key, out var bytes)) continue;
+            var aggKey = (key.Minute, key.Host);
+            var current = aggregated.GetValueOrDefault(aggKey);
+            aggregated[aggKey] = key.Background
+                ? (current.OnAdd, current.Background + bytes)
+                : (current.OnAdd + bytes, current.Background);
+        }
+
+        return aggregated
+            .Select(kv => (kv.Key.Item1, kv.Key.Item2, kv.Value.OnAdd, kv.Value.Background))
+            .ToList();
+    }
+
     public long LifetimeAll => Interlocked.Read(ref _lifetimeAll);
 
     public IReadOnlyDictionary<string, long> LifetimeByHost => _lifetime;
