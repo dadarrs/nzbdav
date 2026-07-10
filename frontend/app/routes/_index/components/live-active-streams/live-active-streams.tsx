@@ -95,8 +95,11 @@ export function LiveActiveStreams() {
                             <span className={styles.speed}>
                                 {formatSpeed(streams.reduce((sum, s) => sum + s.speedBytesPerSec, 0))}
                             </span>
-                            <span className={styles.connections}>
-                                {streams.reduce((sum, s) => sum + s.activeConnections, 0)} conn
+                            <span
+                                className={styles.connections}
+                                title="Segments downloaded ahead of playback and not yet consumed (prefetch buffer occupancy), not open NNTP connections"
+                            >
+                                {streams.reduce((sum, s) => sum + s.activeConnections, 0)} buffered
                             </span>
                         </div>
                     </div>
