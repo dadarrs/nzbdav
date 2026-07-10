@@ -83,9 +83,13 @@ export function LiveActiveStreams() {
                 >
                     <div className={styles.stream}>
                         <div className={styles.fileName}>
-                            {streams.length === 1
-                                ? truncate(streams[0].fileName, 30)
-                                : `${streams.length} files streaming`}
+                            {/* players open several parallel reads of one file; count files, not reads */}
+                            {(() => {
+                                const names = [...new Set(streams.map(s => s.fileName))];
+                                return names.length === 1
+                                    ? truncate(names[0], 30)
+                                    : `${names.length} files streaming`;
+                            })()}
                         </div>
                         <div className={styles.meta}>
                             <span className={styles.speed}>
