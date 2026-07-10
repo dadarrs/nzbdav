@@ -9,6 +9,7 @@ import { isArrsSettingsUpdated, isArrsSettingsValid, ArrsSettings } from "./arrs
 import { isMaintenanceSettingsUpdated, Maintenance } from "./maintenance/maintenance";
 import { isRepairsSettingsUpdated, RepairsSettings } from "./repairs/repairs";
 import { isRcloneSettingsUpdated, RcloneSettings } from "./rclone/rclone";
+import { isSystemSettingsUpdated, SystemSettings } from "./system/system";
 import { useCallback, useState } from "react";
 import { useBlocker } from "react-router";
 import { ConfirmModal } from "~/components/confirm-modal/confirm-modal";
@@ -53,6 +54,7 @@ const defaultConfig = {
     "maintenance.remove-orphaned-schedule-time": "0",
     "api.nzb-backup-enabled": "false",
     "api.nzb-backup-location": "",
+    "ui.theme": "midnight",
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -107,7 +109,8 @@ function Body(props: BodyProps) {
     const isRepairsUpdated = isRepairsSettingsUpdated(config, newConfig);
     const isRcloneUpdated = isRcloneSettingsUpdated(config, newConfig);
     const isMaintenanceUpdated = isMaintenanceSettingsUpdated(config, newConfig);
-    const isUpdated = iseUsenetUpdated || isSabnzbdUpdated || isWebdavUpdated || isArrsUpdated || isRepairsUpdated || isRcloneUpdated || isMaintenanceUpdated;
+    const isSystemUpdated = isSystemSettingsUpdated(config, newConfig);
+    const isUpdated = iseUsenetUpdated || isSabnzbdUpdated || isWebdavUpdated || isArrsUpdated || isRepairsUpdated || isRcloneUpdated || isMaintenanceUpdated || isSystemUpdated;
     const navigationBlocker = useNavigationBlocker(isUpdated);
 
     const usenetTitle = iseUsenetUpdated ? "✏️ Usenet" : "Usenet";
@@ -117,6 +120,7 @@ function Body(props: BodyProps) {
     const repairsTitle = isRepairsUpdated ? "✏️ Repairs" : "Repairs";
     const rcloneTitle = isRcloneUpdated ? "✏️ Rclone Server" : "Rclone Server";
     const maintenanceTitle = isMaintenanceUpdated ? "✏️ Maintenance" : "Maintenance";
+    const systemTitle = isSystemUpdated ? "✏️ System" : "System";
 
     const saveButtonLabel = isSaving ? "Saving..."
         : !isUpdated && isSaved ? "Saved ✅"
@@ -182,6 +186,9 @@ function Body(props: BodyProps) {
                 </Tab>
                 <Tab eventKey="maintenance" title={maintenanceTitle}>
                     <Maintenance savedConfig={config} config={newConfig} setNewConfig={setNewConfig} />
+                </Tab>
+                <Tab eventKey="system" title={systemTitle}>
+                    <SystemSettings config={newConfig} setNewConfig={setNewConfig} />
                 </Tab>
             </Tabs>
             <hr />

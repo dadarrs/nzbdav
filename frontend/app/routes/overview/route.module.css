@@ -1,28 +1,5 @@
 .container {
-    /* Local theme tokens: this page was ported from a fork with a global
-       CSS-variable theme. Define the tokens it uses here, scoped to the page,
-       with values matched to our dark-blue palette. */
-    --bg-base: hsl(198, 100%, 4%);
-    --bg-elevated: hsl(197, 70%, 6.5%);
-    --bg-surface: hsl(196, 55%, 9%);
-    --bg-surface-2: hsl(195, 45%, 13%);
-    --bg-hover: rgba(255, 255, 255, 0.04);
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-default: rgba(255, 255, 255, 0.12);
-    --border-strong: rgba(255, 255, 255, 0.18);
-    --text-primary: #ffffff;
-    --text-secondary: #93a1a1;
-    --text-muted: #6f8289;
-    --text-faint: #56666d;
-    --accent: #4db8ff;
-    --danger: #ef4444;
-    --danger-muted: #f87171;
-    --success: #34d399;
-    --warning: #fbbf24;
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-
+    /* Design tokens now live in app.css :root so themes can recolor them. */
     display: flex;
     flex-direction: column;
     gap: 16px;

@@ -1,0 +1,93 @@
+.container {
+    padding: 10px 4px;
+}
+
+.help {
+    display: block;
+    margin-bottom: 14px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    padding: 0;
+    background: var(--bg-elevated, #10222b);
+    border: 1px solid var(--border-default, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-md, 10px);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.12s ease, transform 0.12s ease;
+}
+
+.card:hover {
+    border-color: var(--border-strong, rgba(255, 255, 255, 0.24));
+}
+
+.cardSelected {
+    border-color: var(--accent, #4db8ff);
+    box-shadow: 0 0 0 1px var(--accent, #4db8ff);
+}
+
+.swatch {
+    position: relative;
+    height: 66px;
+    width: 100%;
+}
+
+.swatchSurface {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    width: 46px;
+    height: 30px;
+    border-radius: 5px;
+}
+
+.swatchAccent {
+    position: absolute;
+    right: 14px;
+    top: 14px;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+}
+
+.swatchText {
+    position: absolute;
+    right: 14px;
+    bottom: 16px;
+    width: 40px;
+    height: 6px;
+    border-radius: 3px;
+    opacity: 0.85;
+}
+
+.cardBody {
+    padding: 10px 12px 12px;
+}
+
+.cardName {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+}
+
+.check {
+    color: var(--accent, #4db8ff);
+}
+
+.cardDesc {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-muted, #6f8289);
+}
