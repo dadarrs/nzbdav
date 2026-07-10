@@ -57,20 +57,13 @@ public class MultiSegmentStream : FastReadOnlyNonSeekableStream
                 var segmentId = _segmentIds.Span[i];
 
                 await _streamTasks.Writer.WaitToWriteAsync(cancellationToken);
+
+                // Count the connection only once it is actually held: incrementing before the
+                // acquire counted pipeline slots waiting on the download semaphore, which let
+                // the widget report far more "connections" than max-download-connections allows.
+                var connection = await _usenetClient.AcquireExclusiveConnectionAsync(segmentId, cancellationToken);
                 _streamInfo?.IncrementConnections();
-                Task<Stream> streamTask;
-                try
-                {
-                    var connection = await _usenetClient.AcquireExclusiveConnectionAsync(segmentId, cancellationToken);
-                    streamTask = DownloadSegment(segmentId, connection, cancellationToken);
-                }
-                catch
-                {
-                    // acquire failed/cancelled after the increment: rebalance the counter,
-                    // otherwise aborted reads leave phantom connections on the widget.
-                    _streamInfo?.DecrementConnections();
-                    throw;
-                }
+                var streamTask = DownloadSegment(segmentId, connection, cancellationToken);
 
                 if (_streamTasks.Writer.TryWrite(streamTask)) continue;
 

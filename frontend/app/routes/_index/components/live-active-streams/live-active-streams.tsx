@@ -83,16 +83,23 @@ export function LiveActiveStreams() {
                 >
                     <div className={styles.stream}>
                         <div className={styles.fileName}>
-                            {streams.length === 1
-                                ? truncate(streams[0].fileName, 30)
-                                : `${streams.length} files streaming`}
+                            {/* players open several parallel reads of one file; count files, not reads */}
+                            {(() => {
+                                const names = [...new Set(streams.map(s => s.fileName))];
+                                return names.length === 1
+                                    ? truncate(names[0], 30)
+                                    : `${names.length} files streaming`;
+                            })()}
                         </div>
                         <div className={styles.meta}>
                             <span className={styles.speed}>
                                 {formatSpeed(streams.reduce((sum, s) => sum + s.speedBytesPerSec, 0))}
                             </span>
-                            <span className={styles.connections}>
-                                {streams.reduce((sum, s) => sum + s.activeConnections, 0)} conn
+                            <span
+                                className={styles.connections}
+                                title="Segments downloaded ahead of playback and not yet consumed (prefetch buffer occupancy), not open NNTP connections"
+                            >
+                                {streams.reduce((sum, s) => sum + s.activeConnections, 0)} buffered
                             </span>
                         </div>
                     </div>

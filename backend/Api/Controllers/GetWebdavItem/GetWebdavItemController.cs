@@ -98,6 +98,8 @@ public class GetWebdavItemController(DatabaseStore store, ConfigManager configMa
                 ? MultiProviderNntpClient.BeginReadSessionScope(readSessionId.Value)
                 : null;
             var buffer = new byte[64 * 1024];
+            // absolute file position, so the live-reads panel shows where the reader is
+            var position = request.RangeStart ?? 0;
             while (true)
             {
                 var bytesRead = await response
@@ -106,9 +108,10 @@ public class GetWebdavItemController(DatabaseStore store, ConfigManager configMa
                 if (bytesRead == 0) break;
                 await Response.Body.WriteAsync(buffer, 0, bytesRead, HttpContext.RequestAborted)
                     .ConfigureAwait(false);
+                position += bytesRead;
                 streamInfo?.AddBytes(bytesRead);
                 if (readRegistry != null && readSessionId != null)
-                    readRegistry.Touch(readSessionId.Value, bytesRead);
+                    readRegistry.Touch(readSessionId.Value, bytesRead, position);
             }
         }
         catch (UnauthorizedAccessException)

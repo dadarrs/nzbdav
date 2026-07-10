@@ -209,6 +209,10 @@ public class GetAndHeadHandlerPatch : IRequestHandler
         // Read in 64KB blocks
         var buffer = new byte[64 * 1024];
 
+        // Track the absolute position in the file so the live-reads panel can show
+        // where the reader currently is (not just how much it has consumed).
+        var position = start;
+
         // Copy, until we don't get any data anymore
         while (bytesToRead > 0)
         {
@@ -219,12 +223,13 @@ public class GetAndHeadHandlerPatch : IRequestHandler
             // We're done, if we cannot read any data anymore
             if (bytesRead == 0)
                 return;
-            
+
             // Write the data to the destination stream
             await dest.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
+            position += bytesRead;
             streamInfo?.AddBytes(bytesRead);
             if (readRegistry != null && readSessionId != null)
-                readRegistry.Touch(readSessionId.Value, bytesRead);
+                readRegistry.Touch(readSessionId.Value, bytesRead, position);
 
             // Decrement the number of bytes left to read
             bytesToRead -= bytesRead;
