@@ -64,6 +64,11 @@ public class ActiveReadsBroadcaster(
             var bytesServed = Interlocked.Read(ref entry.BytesRead);
             if (bytesServed == 0) continue;
 
+            // Sidecar/metadata files (subtitles, nfo, artwork, checksums...) are fetched
+            // constantly by media servers; they aren't "streams" worth remembering.
+            if (SidecarExtensions.Contains(Path.GetExtension(entry.Path).ToLowerInvariant()))
+                continue;
+
             // Players split one viewing into many sessions (any pause/seek gap longer than
             // the 15s activity window ends one). Fold this session into a recent row for
             // the same path so history reads as one entry per viewing, not dozens.
@@ -128,6 +133,23 @@ public class ActiveReadsBroadcaster(
         _wasEmpty = entries.Count == 0;
         await websocketManager.SendMessage(WebsocketTopic.ActiveReads, payload).ConfigureAwait(false);
     }
+
+    // Sidecar/metadata extensions excluded from stream history (still tracked live).
+    private static readonly HashSet<string> SidecarExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // subtitles
+        ".srt", ".sub", ".idx", ".ass", ".ssa", ".vtt", ".smi", ".sup",
+        // info / metadata
+        ".nfo", ".txt", ".xml", ".json",
+        // artwork / images
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".tbn", ".bmp", ".ico",
+        // checksums / recovery
+        ".sfv", ".md5", ".sha1", ".par2", ".srr",
+        // playlists / chapters / thumbnails
+        ".m3u", ".m3u8", ".cue", ".edl", ".bif",
+        // misc pointers
+        ".lrc", ".log", ".strm", ".rclonelink",
+    };
 
     // Merge window: a resumed playback within this gap continues the same history row.
     private static readonly TimeSpan MergeWindow = TimeSpan.FromMinutes(15);
