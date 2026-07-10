@@ -477,6 +477,8 @@ export type OverviewStatsResponse = {
         readSessions: number,
         readSeconds: number,
         firstSeenAt: number | null,
+        healthBytesOnAdd: number,
+        healthBytesBackground: number,
     },
     records: {
         bestDayBytes: number,
@@ -540,6 +542,9 @@ export type ProviderRow = {
     avgDurationMs: number,
     errorRate: number,
     spark: number[],
+    // STAT health-check protocol traffic (billed on byte-metered blocks)
+    healthBytesOnAdd: number,
+    healthBytesBackground: number,
 }
 
 export type HeatmapMode = "day" | "week" | "month" | "year";

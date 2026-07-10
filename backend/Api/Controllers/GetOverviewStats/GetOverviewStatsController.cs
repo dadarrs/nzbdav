@@ -145,6 +145,52 @@ public class GetOverviewStatsController(
                 totalArticles, sessions.Count, readsSaved, previousSaves, failoverBucket, nicknamesByHost);
         }
 
+        // Stitch per-provider STAT health-check traffic onto the scoreboard rows.
+        // Short windows read minutes, long windows hours -- same split as everything else.
+        var healthByProvider = useRollups
+            ? (await metrics.ProviderHourly
+                .Where(h => h.Hour >= windowStart)
+                .GroupBy(h => h.Provider)
+                .Select(g => new
+                {
+                    Provider = g.Key,
+                    OnAdd = g.Sum(h => h.HealthBytesOnAdd),
+                    Background = g.Sum(h => h.HealthBytesBackground),
+                })
+                .ToListAsync().ConfigureAwait(false))
+                .ToDictionary(x => x.Provider, x => (x.OnAdd, x.Background))
+            : (await metrics.ProviderMinutes
+                .Where(m => m.Minute >= windowStart)
+                .GroupBy(m => m.Provider)
+                .Select(g => new
+                {
+                    Provider = g.Key,
+                    OnAdd = g.Sum(m => m.HealthBytesOnAdd),
+                    Background = g.Sum(m => m.HealthBytesBackground),
+                })
+                .ToListAsync().ConfigureAwait(false))
+                .ToDictionary(x => x.Provider, x => (x.OnAdd, x.Background));
+        foreach (var row in providers)
+        {
+            if (!healthByProvider.TryGetValue(row.Provider, out var health)) continue;
+            row.HealthBytesOnAdd = health.OnAdd;
+            row.HealthBytesBackground = health.Background;
+        }
+
+        // a provider may have ONLY health traffic in the window (e.g. a backup carrying
+        // checks but serving no articles) -- give it a row so the column has somewhere to live
+        foreach (var (providerHost, health) in healthByProvider)
+        {
+            if (providers.Any(p => p.Provider == providerHost)) continue;
+            providers.Add(new GetOverviewStatsResponse.ProviderRow
+            {
+                Provider = providerHost,
+                Nickname = nicknamesByHost.GetValueOrDefault(providerHost),
+                HealthBytesOnAdd = health.OnAdd,
+                HealthBytesBackground = health.Background,
+            });
+        }
+
         var catalogue = await BuildCatalogueAsync().ConfigureAwait(false);
         var sessionsBlock = BuildSessionsBlock(sessions.Select(s => (s.DurationMs, s.BytesServed)));
         var lifetime = await BuildLifetimeAsync(metrics).ConfigureAwait(false);
@@ -645,6 +691,11 @@ public class GetOverviewStatsController(
         var readMs = await metrics.ReadSessions
             .SumAsync(x => (long?)x.DurationMs).ConfigureAwait(false) ?? 0L;
 
+        var healthOnAdd = await metrics.ProviderHourly
+            .SumAsync(x => (long?)x.HealthBytesOnAdd).ConfigureAwait(false) ?? 0L;
+        var healthBackground = await metrics.ProviderHourly
+            .SumAsync(x => (long?)x.HealthBytesBackground).ConfigureAwait(false) ?? 0L;
+
         return new GetOverviewStatsResponse.LifetimeBlock
         {
             BytesFetched = bytesFetched,
@@ -653,6 +704,8 @@ public class GetOverviewStatsController(
             ReadSessions = sessionCount,
             ReadSeconds = readMs / 1000,
             FirstSeenAt = firstHour,
+            HealthBytesOnAdd = healthOnAdd,
+            HealthBytesBackground = healthBackground,
         };
     }
 

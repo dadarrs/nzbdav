@@ -31,6 +31,7 @@ export function ProviderScoreboard({ providers, window }: ProviderScoreboardProp
                             <th className={styles.numCol}>Share</th>
                             <th className={styles.numCol}>Errors</th>
                             <th className={styles.numCol}>Retries</th>
+                            <th className={styles.numCol}>Health</th>
                             <th className={styles.numCol}>Avg ms</th>
                         </tr>
                     </thead>
@@ -61,6 +62,14 @@ export function ProviderScoreboard({ providers, window }: ProviderScoreboardProp
                                         {p.errorRate > 0 && <span className={styles.errorRate}> ({formatPercent(p.errorRate * 100, 1)})</span>}
                                     </td>
                                     <td className={styles.numCol}>{formatNumber(p.retries)}</td>
+                                    <td
+                                        className={styles.numCol}
+                                        title={`STAT health-check traffic — on-add: ${formatBytes(p.healthBytesOnAdd)} · background: ${formatBytes(p.healthBytesBackground)}`}
+                                    >
+                                        {p.healthBytesOnAdd + p.healthBytesBackground > 0
+                                            ? formatBytes(p.healthBytesOnAdd + p.healthBytesBackground)
+                                            : "—"}
+                                    </td>
                                     <td className={styles.numCol}>{p.avgDurationMs.toFixed(0)}</td>
                                 </tr>
                             );

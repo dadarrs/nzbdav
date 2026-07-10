@@ -11,4 +11,9 @@ public class ProviderHourly
     public long FailoverSaves { get; set; }
     public long SumDurationMs { get; set; }
     public int? P95DurationMs { get; set; }
+
+    // STAT health-check protocol bytes (command + response lines), split by
+    // whether the check ran on-add (import) or from the background repair job.
+    public long HealthBytesOnAdd { get; set; }
+    public long HealthBytesBackground { get; set; }
 }

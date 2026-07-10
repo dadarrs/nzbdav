@@ -96,6 +96,8 @@ public class MultiProviderNntpClient(
                 continue;
             }
 
+            RecordHealthCheckBytes(provider.Host, subBatch, subResults, cancellationToken);
+
             var stillPending = new List<int>();
             for (var k = 0; k < pending.Count; k++)
             {
@@ -329,6 +331,26 @@ public class MultiProviderNntpClient(
                 Reason = miss.Reason,
             });
         }
+    }
+
+    /// <summary>
+    /// Accounts the NNTP protocol traffic of a STAT batch ("STAT &lt;id&gt;\r\n" commands plus
+    /// one response line each) to the provider that served it. This is what byte-metered
+    /// block accounts are actually billed for during health checks (~45 B per STAT), split
+    /// by on-add vs background via the marker context on the cancellation token.
+    /// </summary>
+    private void RecordHealthCheckBytes(
+        string host,
+        List<string> subBatch,
+        IReadOnlyList<UsenetStatResponse> subResults,
+        CancellationToken ct)
+    {
+        if (bytesTracker == null) return;
+        long bytes = 0;
+        foreach (var id in subBatch) bytes += id.Length + 9; // "STAT <" + id + ">" + CRLF
+        foreach (var result in subResults) bytes += result.ResponseMessage.Length + 2;
+        var isBackground = ct.GetContext<BackgroundHealthCheckContext>() is not null;
+        bytesTracker.AddHealthBytes(host, bytes, isBackground);
     }
 
     private static SegmentFetch.FetchStatus ClassifyException(Exception ex)
