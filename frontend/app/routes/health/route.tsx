@@ -192,6 +192,30 @@ export default function Health({ loaderData }: Route.ComponentProps) {
         }
     }, [queuePage, search, fetchQueuePage]);
 
+    // "check everything" -- front-queues every usenet file. Only ever called after
+    // the strong confirmation modal in the schedule table.
+    const onCheckAll = useCallback(async () => {
+        setIsTriggering(true);
+        setTriggerError(null);
+        try {
+            const response = await fetch(`/api/trigger-health-check?all=1`, { method: 'POST' });
+            if (!response.ok) {
+                setTriggerError('Failed to trigger the health check. Please try again.');
+                return;
+            }
+            const body: { status: boolean, triggeredCount: number, repairJobEnabled: boolean } = await response.json();
+            setShowRepairDisabledWarning(body.repairJobEnabled === false);
+            setSelectedIds(new Set());
+            // triggered items jump to the front of the queue, so show page 1 again
+            if (queuePage !== 1) setQueuePage(1);
+            else await fetchQueuePage(1, search);
+        } catch {
+            setTriggerError('Failed to trigger the health check. Please try again.');
+        } finally {
+            setIsTriggering(false);
+        }
+    }, [queuePage, search, fetchQueuePage]);
+
     // events
     const onHealthItemStatus = useCallback(async (message: string) => {
         const [davItemId, healthResult, repairAction] = message.split('|');
@@ -322,6 +346,7 @@ export default function Health({ loaderData }: Route.ComponentProps) {
                     onToggleSelect={onToggleSelect}
                     onToggleSelectAll={onToggleSelectAll}
                     onCheckNow={onCheckNow}
+                    onCheckAll={onCheckAll}
                     isTriggering={isTriggering}
                 />
             </div>

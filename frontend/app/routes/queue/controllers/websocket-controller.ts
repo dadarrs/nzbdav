@@ -41,7 +41,10 @@ export function initializeQueueHistoryWebsocket(
             if (isHistoryLive) historyEvents.onAddHistorySlot(JSON.parse(message));
         }
         else if (topic == topicNames.historyItemRemoved) {
-            if (isHistoryLive) historyEvents.onRemoveHistorySlots(new Set<string>(message.split(',')));
+            // "*" means the entire history was cleared server-side; handle it on
+            // every page (not just live page 1) since no history remains anywhere
+            if (message === "*") historyEvents.onRemoveAllHistorySlots();
+            else if (isHistoryLive) historyEvents.onRemoveHistorySlots(new Set<string>(message.split(',')));
         }
     }, [
         queueEvents,

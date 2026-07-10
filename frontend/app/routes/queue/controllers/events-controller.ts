@@ -15,7 +15,8 @@ export type HistoryEvents = {
     onAddHistorySlot: (historySlot: HistorySlot) => void,
     onSelectHistorySlots: (ids: Set<string>, isSelected: boolean) => void,
     onRemovingHistorySlots: (ids: Set<string>, isRemoving: boolean) => void,
-    onRemoveHistorySlots: (ids: Set<string>) => void
+    onRemoveHistorySlots: (ids: Set<string>) => void,
+    onRemoveAllHistorySlots: () => void
 };
 
 export function useQueueEvents(
@@ -67,7 +68,8 @@ export function useQueueEvents(
 
 export function useHistoryEvents(
     setHistorySlots: (value: React.SetStateAction<PresentationHistorySlot[]>) => void,
-    pageSize: number
+    pageSize: number,
+    onHistoryCleared: () => void
 ) {
     const onAddHistorySlot = useCallback((historySlot: HistorySlot) => {
         setHistorySlots(slots => [historySlot, ...slots].slice(0, pageSize));
@@ -85,11 +87,19 @@ export function useHistoryEvents(
         setHistorySlots(slots => slots.filter(x => !ids.has(x.nzo_id)));
     }, [setHistorySlots]);
 
+    // the entire history was cleared server-side ("*" websocket payload or a
+    // successful delete-all response) -- drop every slot and go back to page 1
+    const onRemoveAllHistorySlots = useCallback(() => {
+        setHistorySlots([]);
+        onHistoryCleared();
+    }, [setHistorySlots, onHistoryCleared]);
+
     return memoize({
         onAddHistorySlot,
         onSelectHistorySlots,
         onRemovingHistorySlots,
-        onRemoveHistorySlots
+        onRemoveHistorySlots,
+        onRemoveAllHistorySlots
     });
 }
 

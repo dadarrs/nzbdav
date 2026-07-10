@@ -226,6 +226,18 @@ public sealed class DavDatabaseClient(DavDatabaseContext ctx)
         }));
     }
 
+    /// <summary>
+    /// Removes every history item (used by the "select all across pages" delete). Same
+    /// semantics as RemoveHistoryItemsAsync but over the whole table -- ids are loaded
+    /// server-side so the client never has to enumerate every page.
+    /// </summary>
+    public async Task<int> RemoveAllHistoryItemsAsync(bool deleteFiles, CancellationToken ct = default)
+    {
+        var ids = await Ctx.HistoryItems.Select(h => h.Id).ToListAsync(ct).ConfigureAwait(false);
+        await RemoveHistoryItemsAsync(ids, deleteFiles, ct).ConfigureAwait(false);
+        return ids.Count;
+    }
+
     private class FileSizeResult
     {
         public long TotalSize { get; init; }
