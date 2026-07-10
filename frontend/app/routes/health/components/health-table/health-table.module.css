@@ -80,6 +80,27 @@
     cursor: not-allowed;
 }
 
+.checkAllButton {
+    background: none;
+    color: var(--text-muted);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.9em;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.checkAllButton:hover:not(:disabled) {
+    color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+}
+
+.checkAllButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .tableContainer {
     min-height: 200px;
     margin-left: calc(-1 * var(--container-padding));

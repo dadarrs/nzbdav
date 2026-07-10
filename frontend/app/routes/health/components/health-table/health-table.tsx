@@ -1,6 +1,8 @@
 import { Table, Badge, Form } from "react-bootstrap";
+import { useState } from "react";
 import type { HealthCheckQueueItem } from "~/clients/backend-client.server";
 import styles from "./health-table.module.css";
+import { ConfirmModal } from "~/components/confirm-modal/confirm-modal";
 import { Truncate } from "~/routes/queue/components/truncate/truncate";
 import { StatusBadge } from "~/routes/queue/components/status-badge/status-badge";
 import { TriCheckbox, type TriCheckboxState } from "~/routes/queue/components/tri-checkbox/tri-checkbox";
@@ -20,6 +22,7 @@ export type HealthTableProps = {
     onToggleSelect: (id: string, isSelected: boolean) => void,
     onToggleSelectAll: (isSelected: boolean) => void,
     onCheckNow: (ids: string[]) => void,
+    onCheckAll: () => void,
     isTriggering: boolean,
 }
 
@@ -37,8 +40,10 @@ export function HealthTable({
     onToggleSelect,
     onToggleSelectAll,
     onCheckNow,
+    onCheckAll,
     isTriggering,
 }: HealthTableProps) {
+    const [isConfirmingCheckAll, setIsConfirmingCheckAll] = useState(false);
     const selectedOnPage = healthCheckItems.filter(x => selectedIds.has(x.id)).length;
     const headerCheckboxState: TriCheckboxState =
         selectedOnPage === 0 ? 'none'
@@ -78,6 +83,17 @@ export function HealthTable({
                         >
                             {isTriggering ? 'Queueing…' : `Check now (${selectedIds.size})`}
                         </button>
+                        {!isSearchActive && totalCount > 0 &&
+                            <button
+                                type="button"
+                                className={styles.checkAllButton}
+                                disabled={isTriggering}
+                                onClick={() => setIsConfirmingCheckAll(true)}
+                                title="Queue an immediate health check of every file in the library"
+                            >
+                                Check ALL {totalCount} files
+                            </button>
+                        }
                     </div>
 
                     {healthCheckItems.length === 0 ? (
@@ -182,6 +198,38 @@ export function HealthTable({
                     )}
                 </>
             )}
+
+            <ConfirmModal
+                show={isConfirmingCheckAll}
+                title="Health-check the entire library?"
+                message={<>
+                    <p>
+                        This will queue an <b>immediate</b> health check of all{' '}
+                        <b>{totalCount}</b> files in your library. A health check STATs
+                        every article of every file against all of your configured
+                        providers.
+                    </p>
+                    <p>
+                        For a large library this generates a <b>very large amount of
+                        provider traffic and bandwidth</b> and can take a long time to
+                        finish. Hammering providers with this many requests may trigger
+                        rate-limiting or even <b>temporary provider bans</b>.
+                    </p>
+                    {!isEnabled &&
+                        <p>
+                            Note: repairs are currently <b>disabled</b> in Settings →
+                            Repairs, so nothing will actually run until you enable them —
+                            the files will only be moved to the front of the queue.
+                        </p>
+                    }
+                    <p style={{ marginBottom: 0 }}>
+                        Are you sure you want to continue?
+                    </p>
+                </>}
+                confirmText={`Yes, check all ${totalCount}`}
+                cancelText="Cancel"
+                onConfirm={() => { setIsConfirmingCheckAll(false); onCheckAll(); }}
+                onCancel={() => setIsConfirmingCheckAll(false)} />
         </div>
     );
 }

@@ -79,13 +79,23 @@ export default function Queue(props: Route.ComponentProps) {
     const onQueuePageSelected = useCallback((page: number) => setPageParam("qp", page), [setPageParam]);
     const onHistoryPageSelected = useCallback((page: number) => setPageParam("hp", page), [setPageParam]);
 
+    // the entire history was cleared -- reset to page 1; the search-param
+    // navigation also revalidates the loader so totalHistoryCount refreshes
+    const onHistoryCleared = useCallback(() => {
+        setSearchParams(prev => {
+            const next = new URLSearchParams(prev);
+            next.delete("hp");
+            return next;
+        }, { preventScrollReset: true });
+    }, [setSearchParams]);
+
     const combinedQueueSlots = isQueueLive
         ? [...uploadingFiles.map(file => file.queueSlot), ...queueSlots]
         : queueSlots;
 
     // queue/history events
     const queueEvents = useQueueEvents(setUploadingFiles, setQueueSlots, uploadQueueRef, pageSize);
-    const historyEvents = useHistoryEvents(setHistorySlots, pageSize);
+    const historyEvents = useHistoryEvents(setHistorySlots, pageSize, onHistoryCleared);
 
     // websocket
     initializeQueueHistoryWebsocket(queueEvents, historyEvents, isQueueLive, isHistoryLive);
@@ -132,6 +142,7 @@ export default function Queue(props: Route.ComponentProps) {
                     onIsSelectedChanged={historyEvents.onSelectHistorySlots}
                     onIsRemovingChanged={historyEvents.onRemovingHistorySlots}
                     onRemoved={historyEvents.onRemoveHistorySlots}
+                    onRemovedAll={historyEvents.onRemoveAllHistorySlots}
                 />
             }
         </div >

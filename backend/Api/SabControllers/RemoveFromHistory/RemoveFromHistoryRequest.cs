@@ -10,6 +10,8 @@ public class RemoveFromHistoryRequest
 {
     public List<Guid> NzoIds { get; private init; } = [];
     public bool DeleteCompletedFiles { get; private init; }
+    // When set, every history item is removed and NzoIds is ignored ("select all pages").
+    public bool DeleteAll { get; private init; }
     public CancellationToken CancellationToken { get; private init; }
 
     public static async Task<RemoveFromHistoryRequest> New(HttpContext httpContext)
@@ -31,6 +33,7 @@ public class RemoveFromHistoryRequest
                 .Concat(await NzoIdsFromRequestBody(httpContext, cancellationToken).ConfigureAwait(false))
                 .ToList(),
             DeleteCompletedFiles = httpContext.GetRequestParam("del_completed_files") == "1",
+            DeleteAll = httpContext.GetRequestParam("del_all") == "1",
             CancellationToken = cancellationToken
         };
     }

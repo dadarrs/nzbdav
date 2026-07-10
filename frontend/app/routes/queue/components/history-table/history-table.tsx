@@ -1,5 +1,5 @@
 import { ActionButton } from "../action-button/action-button"
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { ConfirmModal } from "~/components/confirm-modal/confirm-modal"
 import { Link } from "react-router"
 import { type TriCheckboxState } from "../tri-checkbox/tri-checkbox"
@@ -22,12 +22,22 @@ export type HistoryTableProps = {
     onIsSelectedChanged: (nzo_ids: Set<string>, isSelected: boolean) => void,
     onIsRemovingChanged: (nzo_ids: Set<string>, isRemoving: boolean) => void,
     onRemoved: (nzo_ids: Set<string>) => void,
+    onRemovedAll: () => void,
 }
 
-export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, totalPages, isLive, onPageSelected, onIsSelectedChanged, onIsRemovingChanged, onRemoved }: HistoryTableProps) {
+export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, totalPages, isLive, onPageSelected, onIsSelectedChanged, onIsRemovingChanged, onRemoved, onRemovedAll }: HistoryTableProps) {
     const [isConfirmingRemoval, setIsConfirmingRemoval] = useState(false);
+    const [selectAllAcrossPages, setSelectAllAcrossPages] = useState(false);
     var selectedCount = historySlots.filter(x => !!x.isSelected).length;
     var headerCheckboxState: TriCheckboxState = selectedCount === 0 ? 'none' : selectedCount === historySlots.length ? 'all' : 'some';
+
+    // gmail-style escalation: only offered while every row on this page is selected,
+    // and automatically dropped the moment that stops being true (deselection,
+    // page navigation, live inserts/removals, ...)
+    const allOnPageSelected = historySlots.length > 0 && selectedCount === historySlots.length;
+    useEffect(() => {
+        if (!allOnPageSelected) setSelectAllAcrossPages(false);
+    }, [allOnPageSelected]);
 
     const onSelectAll = useCallback((isSelected: boolean) => {
         onIsSelectedChanged(new Set<string>(historySlots.map(x => x.nzo_id)), isSelected);
@@ -42,8 +52,30 @@ export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, tota
     }, [setIsConfirmingRemoval]);
 
     const onConfirmRemoval = useCallback(async (deleteCompletedFiles?: boolean) => {
-        var nzo_ids = new Set<string>(historySlots.filter(x => !!x.isSelected).map(x => x.nzo_id));
         setIsConfirmingRemoval(false);
+
+        // "select all across pages" -- delete the entire history server-side
+        if (selectAllAcrossPages) {
+            const pageIds = new Set<string>(historySlots.map(x => x.nzo_id));
+            onIsRemovingChanged(pageIds, true);
+            try {
+                const url = `/api?mode=history&name=delete&del_all=1&del_completed_files=${deleteCompletedFiles ? 1 : 0}`;
+                const response = await fetch(url, { method: 'POST' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === true) {
+                        // clear optimistically; the "*" websocket broadcast is idempotent
+                        setSelectAllAcrossPages(false);
+                        onRemovedAll();
+                        return;
+                    }
+                }
+            } catch { }
+            onIsRemovingChanged(pageIds, false);
+            return;
+        }
+
+        var nzo_ids = new Set<string>(historySlots.filter(x => !!x.isSelected).map(x => x.nzo_id));
         onIsRemovingChanged(nzo_ids, true);
         try {
             const url = `/api?mode=history&name=delete&del_completed_files=${deleteCompletedFiles ? 1 : 0}`;
@@ -63,14 +95,41 @@ export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, tota
             }
         } catch { }
         onIsRemovingChanged(nzo_ids, false);
-    }, [historySlots, setIsConfirmingRemoval, onIsRemovingChanged, onRemoved]);
+    }, [historySlots, selectAllAcrossPages, setIsConfirmingRemoval, onIsRemovingChanged, onRemoved, onRemovedAll]);
 
     var sectionTitle = (
         <div className={styles.sectionTitle}>
             <h3>History</h3>
-            {headerCheckboxState !== 'none' &&
+            {headerCheckboxState !== 'none' && <>
+                <span className={styles.selectedCount}>
+                    {selectAllAcrossPages
+                        ? `All ${totalHistoryCount} selected`
+                        : `${selectedCount} selected`}
+                </span>
                 <ActionButton type="delete" onClick={onRemove} />
-            }
+            </>}
+        </div>
+    );
+
+    const selectAllBanner = allOnPageSelected && totalHistoryCount > historySlots.length && (
+        <div className={styles.selectAllBanner}>
+            {selectAllAcrossPages ? <>
+                <span>All {totalHistoryCount} items in history are selected.</span>
+                <button
+                    type="button"
+                    className={styles.selectAllLink}
+                    onClick={() => setSelectAllAcrossPages(false)}>
+                    Clear selection
+                </button>
+            </> : <>
+                <span>All {selectedCount} on this page are selected.</span>
+                <button
+                    type="button"
+                    className={styles.selectAllLink}
+                    onClick={() => setSelectAllAcrossPages(true)}>
+                    Select all {totalHistoryCount} in history
+                </button>
+            </>}
         </div>
     );
 
@@ -83,6 +142,7 @@ export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, tota
 
     return (
         <PageSection title={sectionTitle}>
+            {selectAllBanner}
             <PageTable headerCheckboxState={headerCheckboxState} onHeaderCheckboxChange={onSelectAll} footer={footer}>
                 {historySlots.map(slot =>
                     <HistoryRow
@@ -98,7 +158,9 @@ export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, tota
             <ConfirmModal
                 show={isConfirmingRemoval}
                 title="Remove From History?"
-                message={`${selectedCount} item(s) will be removed`}
+                message={selectAllAcrossPages
+                    ? `ALL ${totalHistoryCount} history items will be removed`
+                    : `${selectedCount} item(s) will be removed`}
                 checkboxMessage="Delete mounted files"
                 onConfirm={onConfirmRemoval}
                 onCancel={onCancelRemoval} />
