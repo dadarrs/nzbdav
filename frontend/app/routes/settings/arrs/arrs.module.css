@@ -19,13 +19,13 @@
 
 .sectionDivider {
     margin: 40px 0;
-    border-color: #586e75;
+    border-color: var(--border-default);
 }
 
 .instanceCard {
-    color: #93a1a1;
-    background-color: #02181d;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-default);
     margin-bottom: 20px;
     position: relative;
 }
@@ -45,14 +45,14 @@
     right: 12px;
     background: none;
     border: none;
-    color: #93a1a1;
+    color: var(--text-secondary);
     font-size: 21px;
     cursor: pointer;
     transition: color 0.1s ease;
 }
 
 .closeButton:hover {
-    color: white;
+    color: var(--text-primary);
 }
 
 .input {
@@ -60,11 +60,11 @@
 }
 
 .input::placeholder {
-    color: rgba(255, 255, 255, 0.25);
+    color: var(--text-faint);
 }
 
 .error {
-    border: 1px solid red !important;
+    border: 1px solid var(--danger) !important;
 }
 
 .removeButton {
@@ -72,11 +72,11 @@
 }
 
 .alertMessage {
-    color: #93a1a1;
+    color: var(--text-secondary);
     font-style: italic;
     padding: 20px;
-    background-color: #002b36;
-    border: 1px solid #586e75;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-default);
     border-radius: 8px;
 }
 

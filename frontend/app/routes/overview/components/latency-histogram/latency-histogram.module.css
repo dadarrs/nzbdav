@@ -45,7 +45,7 @@
 }
 
 .ok { }
-.warn .pctileValue { color: #d97706; }
+.warn .pctileValue { color: var(--warning); }
 .danger .pctileValue { color: var(--danger-muted); }
 
 .pctileTop {
@@ -115,7 +115,7 @@
 
 .bar {
     width: 100%;
-    background: linear-gradient(to top, var(--success), rgba(52, 211, 153, 0.5));
+    background: linear-gradient(to top, var(--success), color-mix(in srgb, var(--success) 50%, transparent));
     border-radius: 3px 3px 0 0;
     min-height: 2px;
     transition: filter 120ms ease;

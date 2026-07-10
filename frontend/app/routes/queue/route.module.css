@@ -2,7 +2,7 @@
     min-width: 100%;
     min-height: 100%;
     padding: 35px 30px;
-    color: #93a1a1;
+    color: var(--text-secondary);
     font-size: 14px;
 }
 
@@ -39,7 +39,7 @@
 }
 
 .pausedNote {
-    color: hsl(180, 7%, 55%);
+    color: var(--text-muted);
     font-size: 12px;
 }
 
@@ -53,8 +53,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 123, 255, 0.1);
-    outline: 2px dashed #007bff;
+    background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+    outline: 2px dashed var(--accent);
     display: flex;
     align-items: center;
     justify-content: center;

@@ -11,10 +11,10 @@
     width: 250px;
     height: 250px;
     border-radius: 50%;
-    border: 12px solid rgba(147, 161, 161, 0.2);
-    border-top-color: #93a1a1;
+    border: 12px solid color-mix(in srgb, var(--text-secondary) 20%, transparent);
+    border-top-color: var(--text-secondary);
     animation: spin 1.5s linear infinite;
-    box-shadow: 0 0 20px rgba(147, 161, 161, 0.5);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--text-secondary) 50%, transparent);
     position: absolute;
     top: 50%;
     left: 50%;
@@ -32,10 +32,10 @@
 }
 
 .loading-text {
-    color: #93a1a1;
+    color: var(--text-secondary);
     font-size: 2em;
     font-weight: bold;
-    text-shadow: 0 0 6px rgba(147, 161, 161, 0.5);
+    text-shadow: 0 0 6px color-mix(in srgb, var(--text-secondary) 50%, transparent);
     position: absolute;
     top: 50%;
     left: 50%;

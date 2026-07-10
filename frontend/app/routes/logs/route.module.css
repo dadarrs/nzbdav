@@ -1,27 +1,5 @@
 .page {
-    /* Local theme tokens: this page was ported from a fork with a global
-       CSS-variable theme. Define the tokens it uses here, scoped to the page,
-       with values matched to our dark-blue palette. */
-    --bg-base: hsl(198, 100%, 4%);
-    --bg-elevated: hsl(197, 70%, 6.5%);
-    --bg-surface: hsl(196, 55%, 9%);
-    --bg-surface-2: hsl(195, 45%, 13%);
-    --bg-hover: rgba(255, 255, 255, 0.04);
-    --border-subtle: rgba(255, 255, 255, 0.08);
-    --border-default: rgba(255, 255, 255, 0.12);
-    --border-strong: rgba(255, 255, 255, 0.18);
-    --text-primary: #ffffff;
-    --text-secondary: #93a1a1;
-    --text-muted: #6f8289;
-    --text-faint: #56666d;
-    --accent: #4db8ff;
-    --danger: #ef4444;
-    --danger-muted: #f87171;
-    --success: #34d399;
-    --warning: #fbbf24;
-    --radius-sm: 6px;
-    --radius-lg: 14px;
-
+    /* Design tokens now live in app.css :root so themes can recolor them. */
     min-width: 100%;
     min-height: 100%;
     padding: 32px 32px;
@@ -87,13 +65,13 @@
     flex-shrink: 0;
 }
 
-.connLive { background: var(--success); box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18); }
+.connLive { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent); }
 .connReconnecting { background: var(--warning); animation: livePulse 1.4s ease-in-out infinite; }
 .connDisconnected { background: var(--danger); }
 
 @keyframes livePulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.5); }
-    50%      { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0); }
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warning) 50%, transparent); }
+    50%      { box-shadow: 0 0 0 4px transparent; }
 }
 
 .controls {
@@ -151,13 +129,13 @@
 
 .toolbarBtnDanger {
     color: var(--danger-muted);
-    border-color: rgba(239, 68, 68, 0.2);
+    border-color: color-mix(in srgb, var(--danger) 20%, transparent);
 }
 
 .toolbarBtnDanger:hover:not(:disabled) {
     color: var(--danger);
-    background: rgba(239, 68, 68, 0.08);
-    border-color: rgba(239, 68, 68, 0.4);
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+    border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
 /* ---------- Level filter chips ---------- */
@@ -197,10 +175,10 @@
     opacity: 1;
 }
 
-.levelChipActiveInfo    { color: var(--accent); border-color: rgba(56, 139, 253, 0.35); background: rgba(56, 139, 253, 0.08); }
-.levelChipActiveWarning { color: var(--warning); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.08); }
-.levelChipActiveError   { color: var(--danger); border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.08); }
-.levelChipActiveFatal   { color: var(--danger); border-color: rgba(239, 68, 68, 0.6); background: rgba(239, 68, 68, 0.16); }
+.levelChipActiveInfo    { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.levelChipActiveWarning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 35%, transparent); background: color-mix(in srgb, var(--warning) 8%, transparent); }
+.levelChipActiveError   { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.levelChipActiveFatal   { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 60%, transparent); background: color-mix(in srgb, var(--danger) 16%, transparent); }
 .levelChipActiveDebug   { color: var(--text-secondary); border-color: var(--border-strong); background: var(--bg-surface-2); }
 .levelChipActiveVerbose { color: var(--text-muted); border-color: var(--border-strong); background: var(--bg-surface-2); }
 
@@ -324,10 +302,10 @@
 .row + .row { border-top: 1px dashed transparent; }
 
 .rowVerbose, .rowDebug { color: var(--text-muted); border-left-color: var(--border-strong); }
-.rowInformation        { color: var(--text-secondary); border-left-color: rgba(56, 139, 253, 0.4); }
-.rowWarning            { color: var(--warning); border-left-color: var(--warning); background: rgba(251, 191, 36, 0.04); }
-.rowError              { color: var(--danger); border-left-color: var(--danger); background: rgba(239, 68, 68, 0.05); }
-.rowFatal              { color: var(--danger); border-left-color: var(--danger); background: rgba(239, 68, 68, 0.12); font-weight: 600; }
+.rowInformation        { color: var(--text-secondary); border-left-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.rowWarning            { color: var(--warning); border-left-color: var(--warning); background: color-mix(in srgb, var(--warning) 4%, transparent); }
+.rowError              { color: var(--danger); border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 5%, transparent); }
+.rowFatal              { color: var(--danger); border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); font-weight: 600; }
 
 .rowTime {
     color: var(--text-faint);
@@ -358,8 +336,8 @@
 }
 
 .rowWarning .rowMessage { color: var(--text-primary); }
-.rowError .rowMessage   { color: #fda4af; }
-.rowFatal .rowMessage   { color: #fda4af; }
+.rowError .rowMessage   { color: var(--danger-muted); }
+.rowFatal .rowMessage   { color: var(--danger-muted); }
 .rowVerbose .rowMessage, .rowDebug .rowMessage { color: var(--text-secondary); }
 
 .rowSource {
@@ -442,8 +420,8 @@
     color: var(--danger-muted);
     font-size: 12px;
     padding: 8px 12px;
-    background: rgba(239, 68, 68, 0.06);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: color-mix(in srgb, var(--danger) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
     border-radius: var(--radius-sm);
 }
 

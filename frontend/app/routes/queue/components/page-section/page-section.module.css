@@ -1,10 +1,10 @@
 .container {
     width: 100%;
-    background: hsl(196.8 80% 7%);
+    background: var(--bg-elevated);
     border-radius: 10px;
     padding: var(--container-padding);
     padding-bottom: 0;
-    border: 1px solid rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
     --container-padding: 24px;
     margin-bottom: 50px;
 }
@@ -23,11 +23,11 @@
 }
 
 .badgeText {
-    color: hsl(180, 7%, 55%);
+    color: var(--text-muted);
     font-size: 0.9em;
     font-weight: 500;
-    background: hsl(196.8, 25%, 14.51%);
+    background: var(--bg-surface-2);
     padding: 6px 12px;
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
 }

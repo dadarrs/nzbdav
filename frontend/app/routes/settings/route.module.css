@@ -2,14 +2,14 @@
     min-width: 100%;
     min-height: 100%;
     padding: 30px 35px 20px 35px;
-    color: #93a1a1;
+    color: var(--text-secondary);
     font-size: 16px;
 }
 
 .tabs {
-    --bs-nav-tabs-link-active-bg: #002b36;
-    --bs-nav-link-color: #93a1a1;
-    --bs-nav-link-hover-color: #93a1a1;
+    --bs-nav-tabs-link-active-bg: var(--bg-surface);
+    --bs-nav-link-color: var(--text-secondary);
+    --bs-nav-link-hover-color: var(--text-primary);
     margin-bottom: 25px;
     overflow-x: auto;
     overflow-y: hidden;

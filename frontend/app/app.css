@@ -1,10 +1,162 @@
+/*
+ * Theme system.
+ *
+ * :root holds the full design-token set (the canonical "Midnight" dark theme).
+ * Every route and component reads these tokens, so a theme is just an override
+ * block keyed on html[data-theme="..."]. The chrome variables (body / nav
+ * backgrounds) are derived from the same tokens so a theme only has to restate
+ * the token layer. Add a theme by copying a block below and recoloring it.
+ */
 :root {
+  /* layout (theme-independent) */
   --top-nav-height: 60px;
   --left-nav-width: 270px;
-  --body-background-color: hsl(198 100% 4%);
-  --top-nav-background-color: hsl(200 100% 7.65%);
-  --left-nav-background-color: hsl(196.8 100% 4.9%);
   --page-padding: 25px;
+
+  /* surfaces */
+  --bg-base: hsl(198, 100%, 4%);
+  --bg-elevated: hsl(197, 70%, 6.5%);
+  --bg-surface: hsl(196, 55%, 9%);
+  --bg-surface-2: hsl(195, 45%, 13%);
+  --bg-hover: rgba(255, 255, 255, 0.04);
+
+  /* borders (midnight: cool blue-tinted) */
+  --border-subtle: rgba(148, 191, 255, 0.09);
+  --border-default: rgba(148, 191, 255, 0.15);
+  --border-strong: rgba(148, 191, 255, 0.24);
+
+  /* text */
+  --text-primary: #ffffff;
+  --text-secondary: #93a1a1;
+  --text-muted: #6f8289;
+  --text-faint: #56666d;
+
+  /* accents */
+  --accent: #4db8ff;
+  --accent-contrast: #00131f;
+  --danger: #ef4444;
+  --danger-muted: #f87171;
+  --success: #34d399;
+  --warning: #fbbf24;
+
+  /* radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* chrome derived from tokens */
+  --body-background-color: var(--bg-base);
+  --top-nav-background-color: hsl(200, 100%, 7.65%);
+  --left-nav-background-color: hsl(196.8, 100%, 4.9%);
+  --modal-background-color: hsl(196.8, 25%, 14.51%);
+
+  color-scheme: dark;
+}
+
+/* Claude — warm parchment light theme (inspired by claude.ai / qui "claude") */
+:root[data-theme="claude"] {
+  --bg-base: hsl(48, 28%, 94%);
+  --bg-elevated: hsl(48, 33%, 97%);
+  --bg-surface: hsl(46, 24%, 91%);
+  --bg-surface-2: hsl(44, 22%, 87%);
+  --bg-hover: rgba(60, 40, 20, 0.05);
+  --border-subtle: rgba(60, 40, 20, 0.10);
+  --border-default: rgba(60, 40, 20, 0.16);
+  --border-strong: rgba(60, 40, 20, 0.26);
+  --text-primary: hsl(30, 18%, 16%);
+  --text-secondary: hsl(28, 12%, 34%);
+  --text-muted: hsl(28, 10%, 46%);
+  --text-faint: hsl(28, 9%, 58%);
+  --accent: hsl(16, 63%, 52%);
+  --accent-contrast: #ffffff;
+  --danger: hsl(0, 62%, 48%);
+  --danger-muted: hsl(0, 55%, 55%);
+  --success: hsl(148, 45%, 38%);
+  --warning: hsl(35, 78%, 45%);
+  --top-nav-background-color: hsl(48, 30%, 91%);
+  --left-nav-background-color: hsl(46, 26%, 92%);
+  --modal-background-color: hsl(48, 33%, 97%);
+  color-scheme: light;
+}
+
+/* Tangerine — dark charcoal with a bright orange accent (qui "tangerine") */
+:root[data-theme="tangerine"] {
+  --bg-base: hsl(220, 14%, 11%);
+  --bg-elevated: hsl(220, 13%, 14%);
+  --bg-surface: hsl(220, 12%, 17%);
+  --bg-surface-2: hsl(220, 11%, 22%);
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  /* warm-tinted borders (~30 deg hue) so the charcoal reads warm, not neutral */
+  --border-subtle: rgba(255, 199, 148, 0.10);
+  --border-default: rgba(255, 199, 148, 0.16);
+  --border-strong: rgba(255, 199, 148, 0.25);
+  --text-primary: hsl(30, 20%, 96%);
+  --text-secondary: hsl(28, 12%, 72%);
+  --text-muted: hsl(28, 10%, 56%);
+  --text-faint: hsl(28, 9%, 44%);
+  --accent: hsl(24, 95%, 55%);
+  --accent-contrast: #1a0f04;
+  --danger: #f0616d;
+  --danger-muted: #f58a93;
+  --success: #46c99a;
+  --warning: #f5b83d;
+  --top-nav-background-color: hsl(220, 14%, 13%);
+  --left-nav-background-color: hsl(220, 14%, 10%);
+  --modal-background-color: hsl(220, 13%, 16%);
+  color-scheme: dark;
+}
+
+/* Napster — retro light grey (qui "napster", circa-2000 vibe) */
+:root[data-theme="napster"] {
+  --bg-base: hsl(0, 0%, 78%);
+  --bg-elevated: hsl(0, 0%, 88%);
+  --bg-surface: hsl(0, 0%, 83%);
+  --bg-surface-2: hsl(0, 0%, 74%);
+  --bg-hover: rgba(0, 0, 0, 0.06);
+  --border-subtle: rgba(0, 0, 0, 0.14);
+  --border-default: rgba(0, 0, 0, 0.24);
+  --border-strong: rgba(0, 0, 0, 0.38);
+  --text-primary: hsl(0, 0%, 12%);
+  --text-secondary: hsl(0, 0%, 28%);
+  --text-muted: hsl(0, 0%, 42%);
+  --text-faint: hsl(0, 0%, 52%);
+  --accent: hsl(224, 64%, 33%);
+  --accent-contrast: #ffffff;
+  --danger: hsl(4, 70%, 44%);
+  --danger-muted: hsl(4, 60%, 52%);
+  --success: hsl(140, 50%, 30%);
+  --warning: hsl(45, 90%, 38%);
+  --top-nav-background-color: hsl(0, 0%, 72%);
+  --left-nav-background-color: hsl(0, 0%, 75%);
+  --modal-background-color: hsl(0, 0%, 90%);
+  color-scheme: light;
+}
+
+/* Carbon — neutral near-black dark, for OLED / minimal preference */
+:root[data-theme="carbon"] {
+  --bg-base: hsl(0, 0%, 7%);
+  --bg-elevated: hsl(0, 0%, 10%);
+  --bg-surface: hsl(0, 0%, 13%);
+  --bg-surface-2: hsl(0, 0%, 18%);
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  /* crisp pure-neutral borders, slightly stronger for the OLED look */
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-default: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.26);
+  --text-primary: #f2f2f2;
+  --text-secondary: #b8b8b8;
+  --text-muted: #8a8a8a;
+  --text-faint: #6a6a6a;
+  --accent: hsl(160, 60%, 45%);
+  --accent-contrast: #00120c;
+  --danger: #ef4444;
+  --danger-muted: #f87171;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --top-nav-background-color: hsl(0, 0%, 9%);
+  --left-nav-background-color: hsl(0, 0%, 6%);
+  --modal-background-color: hsl(0, 0%, 12%);
+  color-scheme: dark;
 }
 
 html, body {
@@ -13,7 +165,7 @@ html, body {
   min-height: 100%;
   position: absolute;
   background-color: var(--body-background-color);
-  color: white;
+  color: var(--text-primary);
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -23,5 +175,108 @@ html, body {
 }
 .modal {
   --bs-modal-margin: 20px !important;
-  --bs-modal-bg: hsl(196.8 25% 14.51%);
+  --bs-modal-bg: var(--modal-background-color);
+}
+
+/*
+ * Bootstrap wiring.
+ *
+ * Map bootstrap's own design tokens onto the theme tokens so react-bootstrap
+ * components (forms, tables, cards, accordions, dropdowns, modals) pick up
+ * each theme's surfaces and text automatically. html[data-bs-theme] wins over
+ * bootstrap's :root / [data-bs-theme=dark] blocks by specificity + order.
+ */
+html[data-bs-theme] {
+  --bs-body-bg: var(--bg-base);
+  --bs-body-color: var(--text-primary);
+  --bs-emphasis-color: var(--text-primary);
+  --bs-secondary-color: var(--text-secondary);
+  --bs-tertiary-color: var(--text-muted);
+  --bs-secondary-bg: var(--bg-surface-2);
+  --bs-tertiary-bg: var(--bg-surface);
+  --bs-border-color: var(--border-default);
+  --bs-border-color-translucent: var(--border-subtle);
+}
+
+/* Primary buttons take the theme accent everywhere. */
+.btn-primary {
+  --bs-btn-color: var(--accent-contrast);
+  --bs-btn-bg: var(--accent);
+  --bs-btn-border-color: var(--accent);
+  --bs-btn-hover-color: var(--accent-contrast);
+  --bs-btn-hover-bg: color-mix(in srgb, var(--accent) 85%, var(--text-primary));
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--accent) 85%, var(--text-primary));
+  --bs-btn-active-color: var(--accent-contrast);
+  --bs-btn-active-bg: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
+  --bs-btn-active-border-color: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
+  --bs-btn-disabled-color: var(--accent-contrast);
+  --bs-btn-disabled-bg: var(--accent);
+  --bs-btn-disabled-border-color: var(--accent);
+}
+
+.btn-primary:focus-visible,
+.btn-check:focus-visible + .btn-primary,
+.btn-primary:active:focus-visible {
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Checkboxes, radios, switches. */
+.form-check-input:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.form-check-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border-default));
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* Text inputs / selects: accent focus ring instead of bootstrap blue. */
+.form-control:focus,
+.form-select:focus {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--bg-surface));
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* Range sliders. */
+.form-range::-webkit-slider-thumb {
+  background-color: var(--accent);
+}
+.form-range::-moz-range-thumb {
+  background-color: var(--accent);
+}
+.form-range::-webkit-slider-thumb:active {
+  background-color: color-mix(in srgb, var(--accent) 70%, var(--bg-base));
+}
+.form-range::-moz-range-thumb:active {
+  background-color: color-mix(in srgb, var(--accent) 70%, var(--bg-base));
+}
+.form-range:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px var(--bg-base), 0 0 0 0.25rem color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.form-range:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 1px var(--bg-base), 0 0 0 0.25rem color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/*
+ * Plain content links take the accent. :where() keeps specificity at 0-0-1 so
+ * bootstrap's `a` rule loses by order while any classed link style (nav items,
+ * css-module links, button-styled anchors) still wins.
+ */
+a:where(:not(.btn):not(.nav-link):not(.dropdown-item):not(.page-link):not(.navbar-brand)) {
+  color: var(--accent);
+}
+a:where(:not(.btn):not(.nav-link):not(.dropdown-item):not(.page-link):not(.navbar-brand)):where(:hover) {
+  color: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
+}
+
+/* Tabs (settings page) read the token layer instead of bootstrap's palette. */
+.nav-tabs {
+  --bs-nav-tabs-border-color: var(--border-default);
+  --bs-nav-tabs-link-hover-border-color: var(--border-subtle) var(--border-subtle) var(--border-default);
+  --bs-nav-tabs-link-active-color: var(--text-primary);
+  --bs-nav-tabs-link-active-bg: var(--bg-surface);
+  --bs-nav-tabs-link-active-border-color: var(--border-default) var(--border-default) transparent;
+  --bs-nav-link-color: var(--text-secondary);
+  --bs-nav-link-hover-color: var(--text-primary);
 }

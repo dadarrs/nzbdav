@@ -2,7 +2,7 @@
     min-width: 100%;
     min-height: 100%;
     padding: 35px 30px;
-    color: #93a1a1;
+    color: var(--text-secondary);
     font-size: 14px;
 }
 

@@ -38,9 +38,9 @@
 }
 
 .speed {
-    color: #2aa198;
+    color: var(--accent);
 }
 
 .connections {
-    color: #93a1a1;
+    color: var(--text-secondary);
 }

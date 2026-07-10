@@ -1,10 +1,10 @@
 .container {
     width: 100%;
-    background: hsl(196.8 80% 7%);
+    background: var(--bg-elevated);
     border-radius: 10px;
     padding: var(--container-padding);
     padding-bottom: 0;
-    border: 1px solid rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
     --container-padding: 24px;
 }
 
@@ -22,13 +22,13 @@
 }
 
 .count {
-    color: hsl(180, 7%, 55%);
+    color: var(--text-muted);
     font-size: 0.9em;
     font-weight: 500;
-    background: hsl(196.8, 25%, 14.51%);
+    background: var(--bg-surface-2);
     padding: 6px 12px;
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
 }
 
 .tableContainer {
@@ -38,12 +38,12 @@
 
 .table {
     margin: 0;
-    color: hsl(180, 7%, 70%);
+    color: var(--text-secondary);
 
     /* table headers */
     thead th {
-        background-color: hsl(192, 100%, 11%) !important;
-        color: hsl(180, 7%, 85%) !important;
+        background-color: var(--bg-surface) !important;
+        color: var(--text-primary) !important;
         border: none;
         padding: 16px 12px;
         font-weight: 600;
@@ -65,7 +65,7 @@
     tbody td {
         border: none;
         background-color: unset;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid var(--border-subtle);
         padding: 16px 12px;
         vertical-align: middle;
         max-width: 200px;
@@ -88,7 +88,7 @@
 
 .name {
     font-weight: 500;
-    color: hsl(180, 7%, 85%);
+    color: var(--text-primary);
     font-size: 0.95em;
     line-height: 1.3;
     word-break: break-all;
@@ -96,7 +96,7 @@
 
 .path {
     font-size: 0.8em;
-    color: hsl(180, 7%, 55%);
+    color: var(--text-muted);
     font-style: italic;
     word-break: break-all;
     line-height: 1.3;
@@ -104,14 +104,14 @@
 
 .message {
     font-size: 0.8em;
-    color: hsl(35, 60%, 60%);
+    color: var(--warning);
     word-break: break-word;
     line-height: 1.3;
 }
 
 .dateCell {
     font-size: 0.85em;
-    color: hsl(180, 7%, 60%);
+    color: var(--text-secondary);
     text-align: center;
 }
 
@@ -124,7 +124,7 @@
 .emptyState {
     text-align: center;
     padding: 60px 20px;
-    color: hsl(180, 7%, 55%);
+    color: var(--text-muted);
 }
 
 .emptyIcon {
@@ -136,7 +136,7 @@
 .emptyTitle {
     font-size: 1.2em;
     font-weight: 600;
-    color: hsl(180, 7%, 70%);
+    color: var(--text-secondary);
     margin-bottom: 8px;
 }
 
@@ -149,10 +149,10 @@
 
 .detailsTable {
     margin-top: 12px;
-    background: hsl(196.8, 25%, 14.51%);
+    background: var(--bg-surface-2);
     border-radius: 8px;
     padding: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
 }
 
 .detailsRow {
@@ -160,7 +160,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .detailsRow:last-child {
@@ -175,7 +175,7 @@
 .detailsLabel {
     font-size: 0.85em;
     font-weight: 500;
-    color: hsl(180, 7%, 70%);
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     min-width: 80px;
@@ -183,7 +183,7 @@
 
 .detailsValue {
     font-size: 0.9em;
-    color: hsl(180, 7%, 85%);
+    color: var(--text-primary);
     text-align: right;
     word-break: break-word;
     flex: 1;

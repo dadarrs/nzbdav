@@ -8,7 +8,7 @@
     gap: 5px;
     align-items: center;
     justify-content: center;
-    border: 1px solid white;
+    border: 1px solid var(--border-strong);
     border-radius: .375rem;
 
     &:hover {
@@ -26,19 +26,19 @@
 }
 
 .explore {
-    border-color: #ffc107;
+    border-color: var(--warning);
 
     .directory-icon {
         display: inline-block;
         width: 16px;
         height: 16px;
-        fill: #adb8b8;
+        fill: var(--text-secondary);
     }
 
     @media not (pointer: coarse),
     (min-width: 900px) {
         &:hover {
-            background-color: #ffc107;
+            background-color: var(--warning);
 
             .directory-icon {
                 fill: white;
@@ -48,7 +48,7 @@
     }
 
     &:active {
-        background-color: #f0b607;
+        background-color: color-mix(in srgb, var(--warning) 88%, black);
 
         .directory-icon {
             fill: white;
@@ -58,7 +58,7 @@
 }
 
 .menu {
-    border-color: hsl(192, 100%, 20%);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
     font-size: 16px;
     user-select: none;
     width: 30px;
@@ -66,39 +66,39 @@
     @media not (pointer: coarse),
     (min-width: 900px) {
         &:hover {
-            background-color: hsl(192, 100%, 14%);
-            color: white;
+            background-color: color-mix(in srgb, var(--accent) 22%, var(--bg-surface));
+            color: var(--text-primary);
             text-shadow: 0 0 2px black;
         }
     }
 
     &:active {
-        background-color: hsl(192, 100%, 13%);
-        color: white;
+        background-color: color-mix(in srgb, var(--accent) 18%, var(--bg-surface));
+        color: var(--text-primary);
         text-shadow: 0 0 2px black;
     }
 }
 
 .menu.selected {
-    background-color: hsl(192, 100%, 14%);
-    color: white;
+    background-color: color-mix(in srgb, var(--accent) 22%, var(--bg-surface));
+    color: var(--text-primary);
     text-shadow: 0 0 2px black;
 }
 
 .delete {
-    border-color: #dc3545;
+    border-color: var(--danger);
 
     .trash-icon {
         display: inline-block;
         width: calc(22/24 * 16px);
         height: 16px;
-        fill: #adb8b8;
+        fill: var(--text-secondary);
     }
 
     @media not (pointer: coarse),
     (min-width: 900px) {
         &:hover {
-            background-color: #dc3545;
+            background-color: var(--danger);
 
             .trash-icon {
                 fill: white;
@@ -108,7 +108,7 @@
     }
 
     &:active {
-        background-color: #c93140;
+        background-color: color-mix(in srgb, var(--danger) 88%, black);
 
         .trash-icon {
             fill: white;

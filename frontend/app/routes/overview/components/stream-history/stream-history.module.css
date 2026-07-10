@@ -73,8 +73,8 @@
 }
 
 .reasonOk {
-    color: var(--accent-green, #7cc78f);
-    background: color-mix(in srgb, var(--accent-green, #7cc78f) 14%, transparent);
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 14%, transparent);
 }
 
 .reasonNeutral {
@@ -83,18 +83,18 @@
 }
 
 .reasonWarn {
-    color: var(--accent-amber, #d9b45b);
-    background: color-mix(in srgb, var(--accent-amber, #d9b45b) 14%, transparent);
+    color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
 }
 
 .reasonBad {
-    color: var(--accent-red, #d98181);
-    background: color-mix(in srgb, var(--accent-red, #d98181) 14%, transparent);
+    color: var(--danger-muted);
+    background: color-mix(in srgb, var(--danger-muted) 14%, transparent);
 }
 
 .failover {
     font-size: 10.5px;
-    color: var(--accent-amber, #d9b45b);
+    color: var(--warning);
     flex-shrink: 0;
 }
 

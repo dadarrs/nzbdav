@@ -49,11 +49,11 @@
 
 @media not (pointer: coarse), (min-width: 900px)  {
     .directory:hover {
-        background-color: #002b36;
+        background-color: var(--bg-surface);
         cursor: pointer;
     }
 }
 
 .directory:active {
-    background-color: #073642;
+    background-color: var(--bg-surface-2);
 }

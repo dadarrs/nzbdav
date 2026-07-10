@@ -77,7 +77,7 @@
 .progressWrap {
     position: relative;
     height: 4px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bg-hover);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -93,7 +93,7 @@
 .progressIndeterminate {
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(52, 211, 153, 0.7), transparent);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--success) 70%, transparent), transparent);
     background-size: 50% 100%;
     background-repeat: no-repeat;
     animation: indet 1.6s linear infinite;
@@ -141,7 +141,7 @@
     gap: 6px;
     font-size: 11px;
     color: var(--text-muted);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--bg-hover);
     padding: 3px 8px;
     border-radius: 4px;
     max-width: 100%;
@@ -150,7 +150,7 @@
 }
 
 .providerChipPrimary {
-    background: rgba(255, 255, 255, 0.09);
+    background: var(--bg-surface-2);
     color: var(--text-primary);
 }
 
