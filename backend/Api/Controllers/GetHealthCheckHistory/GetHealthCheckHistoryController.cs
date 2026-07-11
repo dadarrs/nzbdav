@@ -56,17 +56,18 @@ public class GetHealthCheckHistoryController(DavDatabaseClient dbClient, ConfigM
     }
 
     /// <summary>
-    /// Deep links for repaired rows, keyed by HealthCheckResult id. The arr item was
-    /// captured in a RepairEvent at repair time (the file no longer exists in the arr
-    /// afterwards, so it cannot be resolved from the path here). The link base prefers
-    /// the instance's configured PublicUrl so links work from outside the network.
+    /// Deep links for repaired and deleted rows, keyed by HealthCheckResult id. The arr
+    /// item was captured in a RepairEvent when the repair/deletion happened (a file-path
+    /// lookup can no longer resolve it afterwards). The link base prefers the instance's
+    /// configured PublicUrl so links work from outside the network.
     /// </summary>
     private async Task<Dictionary<Guid, GetHealthCheckHistoryResponse.ArrLink>> BuildArrLinksAsync(
         List<HealthCheckResult> items)
     {
         var links = new Dictionary<Guid, GetHealthCheckHistoryResponse.ArrLink>();
         var repairedItems = items
-            .Where(x => x.RepairStatus == HealthCheckResult.RepairAction.Repaired)
+            .Where(x => x.RepairStatus is HealthCheckResult.RepairAction.Repaired
+                or HealthCheckResult.RepairAction.Deleted)
             .ToList();
         if (repairedItems.Count == 0) return links;
 

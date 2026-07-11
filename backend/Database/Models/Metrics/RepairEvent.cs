@@ -1,11 +1,11 @@
 namespace NzbWebDAV.Database.Models.Metrics;
 
 /// <summary>
-/// Records which arr media-item a repair re-searched, captured at repair time
-/// because the file is deleted from the arr as part of the repair and can't be
-/// resolved from its path afterwards. Lives in the metrics store so the main
+/// Records which arr media-item a repair re-searched or a deletion belonged to,
+/// captured when the repair/deletion happens because a file-path lookup can no
+/// longer resolve the item afterwards. Lives in the metrics store so the main
 /// database schema stays byte-compatible with upstream. Joined to
-/// HealthCheckResults by DavItemId to deep-link repaired rows on the health page.
+/// HealthCheckResults by DavItemId to deep-link rows on the health page.
 /// </summary>
 public class RepairEvent
 {

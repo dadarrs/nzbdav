@@ -42,6 +42,36 @@ public class RadarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         };
     }
 
+    public override async Task<ArrRepairedMedia?> TryIdentify(string symlinkOrStrmPath)
+    {
+        // prefer the exact movie-file match when radarr still has the file
+        var media = await GetMedia(symlinkOrStrmPath);
+        var movie = media?.movie;
+
+        // otherwise match by movie folder, which survives the file's deletion
+        if (movie == null)
+        {
+            foreach (var candidate in await GetMoviesAsync())
+            {
+                var folder = candidate.Path?.TrimEnd('/');
+                if (folder != null && symlinkOrStrmPath.StartsWith($"{folder}/"))
+                {
+                    movie = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (movie == null) return null;
+        return new ArrRepairedMedia
+        {
+            Kind = ArrRepairedMedia.RadarrKind,
+            ItemId = movie.Id,
+            TitleSlug = movie.TitleSlug,
+            Title = movie.Title,
+        };
+    }
+
     private async Task<(int movieFileId, RadarrMovie movie)?> GetMedia(string symlinkOrStrmPath)
     {
         // if we already have the movie-id cached

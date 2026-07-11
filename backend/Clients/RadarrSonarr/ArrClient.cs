@@ -20,6 +20,16 @@ public class ArrClient(string host, string apiKey)
     public virtual Task<ArrRepairedMedia?> RemoveAndSearch(string symlinkOrStrmPath) =>
         throw new InvalidOperationException();
 
+    /// <summary>
+    /// Resolves which library item a path belongs to WITHOUT modifying the arr.
+    /// Unlike RemoveAndSearch's file lookup, this matches by item folder, so it
+    /// still works when the arr has no file for the item (e.g. a deletion where
+    /// no replacement could be grabbed). Used to deep-link deleted rows on the
+    /// health page.
+    /// </summary>
+    public virtual Task<ArrRepairedMedia?> TryIdentify(string symlinkOrStrmPath) =>
+        Task.FromResult<ArrRepairedMedia?>(null);
+
     public Task<List<ArrRootFolder>> GetRootFolders() =>
         Get<List<ArrRootFolder>>($"/rootfolder");
 

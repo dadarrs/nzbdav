@@ -68,6 +68,22 @@ public class SonarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         };
     }
 
+    public override async Task<ArrRepairedMedia?> TryIdentify(string symlinkOrStrmPath)
+    {
+        // matches by series folder, so it works even when sonarr no longer has
+        // an episode-file at this path (e.g. a deletion with no replacement)
+        var seriesId = await GetSeriesId(symlinkOrStrmPath);
+        if (seriesId == null) return null;
+        var series = await GetSeries(seriesId.Value);
+        return new ArrRepairedMedia
+        {
+            Kind = ArrRepairedMedia.SonarrKind,
+            ItemId = seriesId.Value,
+            TitleSlug = series.TitleSlug,
+            Title = series.Title,
+        };
+    }
+
     private async Task<(int episodeFileId, List<int> episodeIds, int seriesId)?> GetMediaIds(string symlinkOrStrmPath)
     {
         // get episode-file-id

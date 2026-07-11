@@ -268,7 +268,8 @@ public class HealthCheckService : BackgroundService
             // if the unhealthy item is linked within the organized media-library
             // then we must find the corresponding arr instance and trigger a new search.
             var linkType = symlinkOrStrmPath.ToLower().EndsWith("strm") ? "strm-file" : "symlink";
-            foreach (var arrClient in _configManager.GetArrConfig().GetArrClients())
+            var arrClients = _configManager.GetArrConfig().GetArrClients().ToList();
+            foreach (var arrClient in arrClients)
             {
                 var rootFolders = await arrClient.GetRootFolders().ConfigureAwait(false);
                 if (!rootFolders.Any(x => symlinkOrStrmPath.StartsWith(x.Path!))) continue;
@@ -325,6 +326,27 @@ public class HealthCheckService : BackgroundService
                 ])
             }));
             await dbClient.Ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            // The library item (movie/series) usually still exists in an arr even though
+            // the file-level lookup failed -- e.g. the file was already replaced, or path
+            // mappings differ. Identify it by folder so the deleted row can still link to
+            // the item page, where a manual search can be triggered. Best-effort.
+            foreach (var arrClient in arrClients)
+            {
+                ArrRepairedMedia? deletedMedia = null;
+                try
+                {
+                    deletedMedia = await arrClient.TryIdentify(symlinkOrStrmPath).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // link enrichment only; never fail the completed deletion
+                }
+
+                if (deletedMedia == null) continue;
+                await RecordRepairEventAsync(davItem, arrClient.Host, deletedMedia).ConfigureAwait(false);
+                break;
+            }
         }
         catch (Exception e)
         {
