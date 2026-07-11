@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 
 namespace NzbWebDAV.Api.Controllers.GetReadSessions;
 
 [ApiController]
 [Route("api/get-read-sessions")]
-public class GetReadSessionsController : BaseApiController
+public class GetReadSessionsController(ConfigManager configManager) : BaseApiController
 {
     private const int DefaultPageSize = 10;
     private const int MaxPageSize = 50;
@@ -18,8 +19,14 @@ public class GetReadSessionsController : BaseApiController
             ? Math.Clamp(s, 1, MaxPageSize)
             : DefaultPageSize;
 
+        // "Clear history" hides entries behind a watermark rather than deleting them,
+        // so dashboard statistics computed from ReadSessions stay intact.
+        var clearedBefore = configManager.GetStreamHistoryClearedBefore();
+
         await using var metrics = new MetricsDbContext();
-        var query = metrics.ReadSessions.OrderByDescending(x => x.EndedAt);
+        var query = metrics.ReadSessions
+            .Where(x => x.EndedAt > clearedBefore)
+            .OrderByDescending(x => x.EndedAt);
         var totalCount = await query.CountAsync().ConfigureAwait(false);
         var sessions = await query
             .Skip((page - 1) * pageSize)

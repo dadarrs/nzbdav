@@ -198,6 +198,17 @@ public class ConfigManager
     }
 
     /// <summary>
+    /// Unix-ms watermark set by "Clear history" on the overview stream-history panel.
+    /// Read sessions that ended at or before this instant are hidden from the history
+    /// list but keep contributing to dashboard statistics (rows are not deleted).
+    /// </summary>
+    public long GetStreamHistoryClearedBefore()
+    {
+        var configValue = StringUtil.EmptyToNull(GetConfigValue("metrics.stream-history-cleared-before"));
+        return configValue != null && long.TryParse(configValue, out var value) ? value : 0L;
+    }
+
+    /// <summary>
     /// Master switch for NNTP STAT pipelining. When disabled, STAT health checks always run
     /// one-command-per-round-trip regardless of any provider's individual pipelining setting.
     /// </summary>

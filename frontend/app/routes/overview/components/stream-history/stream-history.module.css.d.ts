@@ -1,6 +1,7 @@
 declare const styles: {
     readonly container: string;
     readonly header: string;
+    readonly clearButton: string;
     readonly title: string;
     readonly sub: string;
     readonly empty: string;

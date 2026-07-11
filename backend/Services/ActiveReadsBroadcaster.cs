@@ -167,9 +167,12 @@ public class ActiveReadsBroadcaster(
         try
         {
             var cutoff = entry.StartedAt.Subtract(MergeWindow).ToUnixTimeMilliseconds();
+            // never merge into rows hidden by "Clear history" -- the merged viewing
+            // would inherit the hidden state and silently vanish from the list
+            var clearedBefore = configManager.GetStreamHistoryClearedBefore();
             await using var db = new Database.MetricsDbContext();
             var recent = db.ReadSessions
-                .Where(x => x.Path == entry.Path && x.EndedAt >= cutoff)
+                .Where(x => x.Path == entry.Path && x.EndedAt >= cutoff && x.EndedAt > clearedBefore)
                 .OrderByDescending(x => x.EndedAt)
                 .FirstOrDefault();
             if (recent == null) return false;
