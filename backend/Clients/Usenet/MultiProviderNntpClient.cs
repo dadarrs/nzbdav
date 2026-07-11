@@ -96,7 +96,7 @@ public class MultiProviderNntpClient(
                 continue;
             }
 
-            RecordHealthCheckBytes(provider.Host, subBatch, subResults, cancellationToken);
+            RecordHealthCheckBytes(provider.Name, subBatch, subResults, cancellationToken);
 
             var stillPending = new List<int>();
             for (var k = 0; k < pending.Count; k++)
@@ -249,32 +249,32 @@ public class MultiProviderNntpClient(
                 // if no article with that message-id is found, try again with the next provider.
                 if (result.ResponseType == UsenetResponseType.NoArticleWithThatMessageId)
                 {
-                    RecordFetch(provider.Host, SegmentFetch.FetchStatus.Missing, stopwatch.ElapsedMilliseconds, i);
+                    RecordFetch(provider.Name, SegmentFetch.FetchStatus.Missing, stopwatch.ElapsedMilliseconds, i);
                     if (!isLastProvider)
                     {
-                        (priorMisses ??= []).Add((provider.Host, SegmentFetch.FetchStatus.Missing));
+                        (priorMisses ??= []).Add((provider.Name, SegmentFetch.FetchStatus.Missing));
                         continue;
                     }
 
                     return result;
                 }
 
-                RecordFetch(provider.Host, SegmentFetch.FetchStatus.Ok, stopwatch.ElapsedMilliseconds, i);
-                usageTracker?.RecordSuccess(provider.Host);
+                RecordFetch(provider.Name, SegmentFetch.FetchStatus.Ok, stopwatch.ElapsedMilliseconds, i);
+                usageTracker?.RecordSuccess(provider.Name);
                 if (priorMisses is { Count: > 0 })
                 {
                     // A later provider rescued a segment the earlier ones missed/failed.
                     usageTracker?.RecordFailoverSave();
-                    RecordFailoverMisses(priorMisses, rescuer: provider.Host);
+                    RecordFailoverMisses(priorMisses, rescuer: provider.Name);
                 }
 
-                return WrapCounting(result, provider.Host);
+                return WrapCounting(result, provider.Name);
             }
             catch (Exception e) when (!e.IsCancellationException())
             {
                 var reason = ClassifyException(e);
-                RecordFetch(provider.Host, reason, stopwatch.ElapsedMilliseconds, i);
-                (priorMisses ??= []).Add((provider.Host, reason));
+                RecordFetch(provider.Name, reason, stopwatch.ElapsedMilliseconds, i);
+                (priorMisses ??= []).Add((provider.Name, reason));
                 lastException = ExceptionDispatchInfo.Capture(e);
             }
         }
@@ -380,7 +380,7 @@ public class MultiProviderNntpClient(
     {
         var limit = client.ByteLimit;
         if (bytesTracker == null || !limit.HasValue || limit.Value <= 0) return false;
-        var used = bytesTracker.GetLifetime(client.Host) + client.BytesUsedOffset;
+        var used = bytesTracker.GetLifetime(client.Name) + client.BytesUsedOffset;
         // Stop at the effective cutoff (95% of cap) so in-flight fetches that
         // already passed this check can't push the actual count past the cap.
         // See ProviderUsageHelper.EffectiveLimitFraction for the rationale.

@@ -22,6 +22,31 @@ public class UsenetProviderConfig
         .Select(x => x.MaxConnections)
         .Sum());
 
+    /// <summary>
+    /// Per-account identity used for metrics attribution and display, aligned by index with
+    /// Providers: the nickname when set, otherwise the host -- deduplicated in list order as
+    /// host, host2, host3... so multiple accounts on the same backbone stay distinguishable.
+    /// A single unnamed provider keeps its plain hostname, preserving continuity with
+    /// metrics recorded before this existed.
+    /// </summary>
+    public List<string> GetEffectiveNames()
+    {
+        var names = new List<string>(Providers.Count);
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var provider in Providers)
+        {
+            var baseName = string.IsNullOrWhiteSpace(provider.Nickname)
+                ? provider.Host
+                : provider.Nickname.Trim();
+            var name = baseName;
+            var suffix = 2;
+            while (!used.Add(name)) name = $"{baseName}{suffix++}";
+            names.Add(name);
+        }
+
+        return names;
+    }
+
     public class ConnectionDetails
     {
         public required ProviderType Type { get; set; }

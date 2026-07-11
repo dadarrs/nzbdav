@@ -152,10 +152,12 @@ public class UsenetStreamingClient : WrappingNntpClient
             providerConfig,
             configManager.UseBackupProvidersForHealthChecks,
             websocketManager);
+        var effectiveNames = providerConfig.GetEffectiveNames();
         var providerClients = providerConfig.Providers
             .Select((provider, index) => CreateProviderClient(
                 provider,
-                connectionPoolStats.GetOnConnectionPoolChanged(index)
+                connectionPoolStats.GetOnConnectionPoolChanged(index),
+                effectiveNames[index]
             ))
             .ToList();
         // The flags are read through a delegate so toggling the settings takes effect
@@ -174,7 +176,8 @@ public class UsenetStreamingClient : WrappingNntpClient
     private static MultiConnectionNntpClient CreateProviderClient
     (
         UsenetProviderConfig.ConnectionDetails connectionDetails,
-        EventHandler<ConnectionPoolStats.ConnectionPoolChangedEventArgs> onConnectionPoolChanged
+        EventHandler<ConnectionPoolStats.ConnectionPoolChangedEventArgs> onConnectionPoolChanged,
+        string effectiveName
     )
     {
         var connectionPool = CreateNewConnectionPool(
@@ -190,7 +193,8 @@ public class UsenetStreamingClient : WrappingNntpClient
             connectionDetails.Host,
             connectionDetails.StatPipeliningEnabled,
             connectionDetails.ByteLimit,
-            connectionDetails.BytesUsedOffset);
+            connectionDetails.BytesUsedOffset,
+            effectiveName);
     }
 
     private static ConnectionPool<INntpClient> CreateNewConnectionPool

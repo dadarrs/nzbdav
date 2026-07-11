@@ -73,6 +73,30 @@ function serializeProviderConfig(config: UsenetProviderConfig): string {
     return JSON.stringify(config);
 }
 
+// Mirrors UsenetProviderConfig.GetEffectiveNames() on the backend: each
+// provider's identity is its Nickname if set, else its Host, deduped
+// case-insensitively in list order by suffixing 2, 3, ... onto later
+// duplicates. Metrics and usage are keyed by this name server-side.
+function computeEffectiveNames(providers: ConnectionDetails[]): string[] {
+    const names: string[] = [];
+    const used = new Set<string>();
+    for (const provider of providers) {
+        const name = dedupeEffectiveName(provider.Nickname?.trim() || provider.Host, used);
+        used.add(name.toLowerCase());
+        names.push(name);
+    }
+    return names;
+}
+
+// Suffixes 2, 3, ... onto baseName until it no longer collides with
+// takenLower (a set of already-lowercased names).
+function dedupeEffectiveName(baseName: string, takenLower: ReadonlySet<string>): string {
+    let name = baseName;
+    let suffix = 2;
+    while (takenLower.has(name.toLowerCase())) name = `${baseName}${suffix++}`;
+    return name;
+}
+
 // Data caps use decimal units (1 GB = 10^9 bytes), matching how block
 // providers advertise their blocks.
 const BYTES_PER_GB = 1_000_000_000;
@@ -133,6 +157,48 @@ export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSet
     });
     const providerConfig = useMemo(() => parseProviderConfig(config["usenet.providers"]), [config]);
 
+    // Effective display name for every provider, by global index.
+    const effectiveNames = useMemo(
+        () => computeEffectiveNames(providerConfig.Providers),
+        [providerConfig]);
+
+    // What the modal validates nicknames against: the effective names of every
+    // provider EXCEPT the one being edited (a provider can't collide with itself).
+    const otherEffectiveNames = useMemo(
+        () => computeEffectiveNames(providerConfig.Providers.filter((_, i) => i !== editingIndex)),
+        [providerConfig, editingIndex]);
+
+    // Cards render grouped by provider type, but every handler and data join
+    // (edit/delete/reset, usage, websocket connection counts) is keyed by the
+    // provider's GLOBAL index in the Providers array — so each entry carries
+    // its original index through the grouping instead of using the filtered
+    // position. Empty groups (including "Disabled") are not rendered.
+    const providerSections = useMemo(() => {
+        const indexed = providerConfig.Providers.map((provider, index) => ({ provider, index }));
+        const isBackup = (type: ProviderType) =>
+            type === ProviderType.BackupAndStats || type === ProviderType.BackupOnly;
+        return [
+            {
+                key: "pooled",
+                title: "Pool Connections",
+                // Catch-all for non-backup, non-disabled so a provider with an
+                // unexpected Type value still renders somewhere.
+                items: indexed.filter(({ provider }) =>
+                    provider.Type !== ProviderType.Disabled && !isBackup(provider.Type)),
+            },
+            {
+                key: "backup",
+                title: "Backup Providers",
+                items: indexed.filter(({ provider }) => isBackup(provider.Type)),
+            },
+            {
+                key: "disabled",
+                title: "Disabled",
+                items: indexed.filter(({ provider }) => provider.Type === ProviderType.Disabled),
+            },
+        ].filter(section => section.items.length > 0);
+    }, [providerConfig]);
+
     // handlers
     const handleAddProvider = useCallback(() => {
         setEditingIndex(null);
@@ -153,13 +219,13 @@ export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSet
     const handleResetUsage = useCallback((index: number) => {
         const current = providerConfig.Providers[index];
         if (!current) return;
-        const label = current.Nickname?.trim() || current.Host;
+        const label = effectiveNames[index] ?? current.Host;
         if (!confirm(`Reset the bytes-used counter for "${label}" to zero?\n\nUseful after buying a new block. Takes effect when you save settings.`)) return;
         const newProviderConfig = { ...providerConfig };
         newProviderConfig.Providers = providerConfig.Providers.map((p, i) =>
             i === index ? { ...p, BytesUsedOffset: 0, BytesUsedResetAt: Date.now() } : p);
         setNewConfig({ ...config, "usenet.providers": serializeProviderConfig(newProviderConfig) });
-    }, [config, providerConfig, setNewConfig]);
+    }, [config, providerConfig, effectiveNames, setNewConfig]);
 
     const handleCloseModal = useCallback(() => {
         setShowModal(false);
@@ -250,140 +316,25 @@ export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSet
                         Click on the "Add" button to get started.
                     </p>
                 ) : (
-                    <div className={styles["providers-grid"]}>
-                        {providerConfig.Providers.map((provider, index) => (
-                            <div key={index} className={styles["provider-card"]}>
-                                <div className={styles["provider-card-inner"]}>
-                                    <div className={styles["provider-header"]}>
-                                        <div className={styles["provider-header-content"]}>
-                                            <div className={styles["provider-host"]}>
-                                                {provider.Nickname?.trim() || provider.Host}
-                                            </div>
-                                            {provider.Nickname?.trim() && (
-                                                <div className={styles["provider-host-secondary"]}>
-                                                    {provider.Host}
-                                                </div>
-                                            )}
-                                            <div className={styles["provider-port"]}>
-                                                Port {provider.Port}
-                                            </div>
-                                        </div>
-                                        <div className={styles["provider-header-actions"]}>
-                                            <button
-                                                className={styles["header-action-button"]}
-                                                onClick={() => handleEditProvider(index)}
-                                                title="Edit Provider"
-                                            >
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                                </svg>
-                                            </button>
-                                            <button
-                                                className={`${styles["header-action-button"]} ${styles["delete"]}`}
-                                                onClick={() => handleDeleteProvider(index)}
-                                                title="Delete Provider"
-                                            >
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                    <polyline points="3 6 5 6 21 6" />
-                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className={styles["provider-details"]}>
-                                        <div className={styles["provider-detail-row"]}>
-
-                                            <div className={styles["provider-detail-item"]}>
-                                                <div className={styles["provider-detail-icon"]}>
-                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                                        <circle cx="12" cy="7" r="4" />
-                                                    </svg>
-                                                </div>
-                                                <div className={styles["provider-detail-content"]}>
-                                                    <span className={styles["provider-detail-label"]}>Username</span>
-                                                    <span className={styles["provider-detail-value"]}>{provider.User}</span>
-                                                </div>
-                                            </div>
-
-                                            <div className={styles["provider-detail-item"]}>
-                                                {connections[index] && (
-                                                    <div className={styles["connection-bar"]}>
-                                                        <div
-                                                            className={styles["connection-bar-live"]}
-                                                            style={{ width: `${100 * (connections[index].live / connections[index].max)}%` }}
-                                                        />
-                                                        <div
-                                                            className={styles["connection-bar-active"]}
-                                                            style={{ width: `${100 * (connections[index].active / connections[index].max)}%` }}
-                                                        />
-                                                    </div>
-                                                )}
-                                                <div className={styles["provider-detail-icon"]}>
-                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                                                    </svg>
-                                                </div>
-                                                <div className={styles["provider-detail-content"]}>
-                                                    <span className={styles["provider-detail-label"]}>Max Connections</span>
-                                                    <span className={styles["provider-detail-value"]}>{provider.MaxConnections}</span>
-                                                </div>
-                                            </div>
-
-                                            <div className={styles["provider-detail-item"]}>
-                                                <div className={styles["provider-detail-icon"]}>
-                                                    {provider.UseSsl ? (
-                                                        // Closed lock icon
-                                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <rect x="5" y="11" width="14" height="11" rx="2" ry="2" />
-                                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                                            <circle cx="12" cy="16" r="1" fill="currentColor" />
-                                                        </svg>
-                                                    ) : (
-                                                        // Open lock icon
-                                                        <svg width="13" height="13" viewBox="0 -2 24 26" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <rect x="5" y="11" width="14" height="11" rx="2" ry="2" />
-                                                            <path d="M7 11V4a5 5 0 0 1 9.9 1" />
-                                                            <circle cx="12" cy="16" r="1" fill="currentColor" />
-                                                        </svg>
-                                                    )}
-                                                </div>
-                                                <div className={styles["provider-detail-content"]}>
-                                                    <span className={styles["provider-detail-label"]}>Security</span>
-                                                    <span className={styles["provider-detail-value"]}>
-                                                        {provider.UseSsl ? "SSL Enabled" : "No SSL"}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            <div className={styles["provider-detail-item"]}>
-                                                <div className={styles["provider-detail-icon"]}>
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
-                                                        <text x="12" y="9" fontSize="10" fill="currentColor" textAnchor="middle" fontWeight="600">1</text>
-                                                        <text x="6" y="21" fontSize="10" fill="currentColor" textAnchor="middle" fontWeight="600">2</text>
-                                                        <text x="18" y="21" fontSize="10" fill="currentColor" textAnchor="middle" fontWeight="600">3</text>
-                                                    </svg>
-                                                </div>
-                                                <div className={styles["provider-detail-content"]}>
-                                                    <span className={styles["provider-detail-label"]}>Behavior</span>
-                                                    <span className={styles["provider-detail-value"]}>{PROVIDER_TYPE_LABELS[provider.Type]}</span>
-                                                </div>
-                                            </div>
-
-                                        </div>
-
-                                        <UsageRow
-                                            provider={provider}
-                                            usage={usage[index]}
-                                            onReset={() => handleResetUsage(index)}
-                                        />
-                                    </div>
-                                </div>
+                    providerSections.map((section) => (
+                        <div key={section.key} className={styles["provider-section"]}>
+                            <div className={styles["provider-section-title"]}>{section.title}</div>
+                            <div className={styles["providers-grid"]}>
+                                {section.items.map(({ provider, index }) => (
+                                    <ProviderCard
+                                        key={index}
+                                        provider={provider}
+                                        effectiveName={effectiveNames[index] ?? provider.Host}
+                                        counts={connections[index]}
+                                        usage={usage[index]}
+                                        onEdit={() => handleEditProvider(index)}
+                                        onDelete={() => handleDeleteProvider(index)}
+                                        onResetUsage={() => handleResetUsage(index)}
+                                    />
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ))
                 )}
             </div>
 
@@ -391,9 +342,160 @@ export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSet
                 show={showModal}
                 provider={editingIndex !== null ? providerConfig.Providers[editingIndex] : null}
                 pipeliningMasterEnabled={config["usenet.nntp-pipelining.enabled"] === "true"}
+                otherEffectiveNames={otherEffectiveNames}
                 onClose={handleCloseModal}
                 onSave={handleSaveProvider}
             />
+        </div>
+    );
+}
+
+type ProviderCardProps = {
+    provider: ConnectionDetails;
+    // The provider's unique display identity (nickname/host after dedupe),
+    // resolved by the caller from the full provider list.
+    effectiveName: string;
+    counts: ConnectionCounts | undefined;
+    usage: ProviderUsageItem | undefined;
+    onEdit: () => void;
+    onDelete: () => void;
+    onResetUsage: () => void;
+};
+
+// One provider card. Everything index-keyed (usage, connection counts,
+// handlers) is pre-resolved by the caller against the provider's global index,
+// so the card itself never sees a filtered position.
+function ProviderCard({ provider, effectiveName, counts, usage, onEdit, onDelete, onResetUsage }: ProviderCardProps) {
+    return (
+        <div className={styles["provider-card"]}>
+            <div className={styles["provider-card-inner"]}>
+                <div className={styles["provider-header"]}>
+                    <div className={styles["provider-header-content"]}>
+                        <div className={styles["provider-host"]}>
+                            {effectiveName}
+                        </div>
+                        {effectiveName !== provider.Host && (
+                            <div className={styles["provider-host-secondary"]}>
+                                {provider.Host}
+                            </div>
+                        )}
+                        <div className={styles["provider-port"]}>
+                            Port {provider.Port}
+                        </div>
+                    </div>
+                    <div className={styles["provider-header-actions"]}>
+                        <button
+                            className={styles["header-action-button"]}
+                            onClick={onEdit}
+                            title="Edit Provider"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                        </button>
+                        <button
+                            className={`${styles["header-action-button"]} ${styles["delete"]}`}
+                            onClick={onDelete}
+                            title="Delete Provider"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div className={styles["provider-details"]}>
+                    <div className={styles["provider-detail-row"]}>
+
+                        <div className={styles["provider-detail-item"]}>
+                            <div className={styles["provider-detail-icon"]}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                    <circle cx="12" cy="7" r="4" />
+                                </svg>
+                            </div>
+                            <div className={styles["provider-detail-content"]}>
+                                <span className={styles["provider-detail-label"]}>Username</span>
+                                <span className={styles["provider-detail-value"]}>{provider.User}</span>
+                            </div>
+                        </div>
+
+                        <div className={styles["provider-detail-item"]}>
+                            {counts && (
+                                <div className={styles["connection-bar"]}>
+                                    <div
+                                        className={styles["connection-bar-live"]}
+                                        style={{ width: `${100 * (counts.live / counts.max)}%` }}
+                                    />
+                                    <div
+                                        className={styles["connection-bar-active"]}
+                                        style={{ width: `${100 * (counts.active / counts.max)}%` }}
+                                    />
+                                </div>
+                            )}
+                            <div className={styles["provider-detail-icon"]}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                                </svg>
+                            </div>
+                            <div className={styles["provider-detail-content"]}>
+                                <span className={styles["provider-detail-label"]}>Max Connections</span>
+                                <span className={styles["provider-detail-value"]}>{provider.MaxConnections}</span>
+                            </div>
+                        </div>
+
+                        <div className={styles["provider-detail-item"]}>
+                            <div className={styles["provider-detail-icon"]}>
+                                {provider.UseSsl ? (
+                                    // Closed lock icon
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <rect x="5" y="11" width="14" height="11" rx="2" ry="2" />
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                        <circle cx="12" cy="16" r="1" fill="currentColor" />
+                                    </svg>
+                                ) : (
+                                    // Open lock icon
+                                    <svg width="13" height="13" viewBox="0 -2 24 26" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <rect x="5" y="11" width="14" height="11" rx="2" ry="2" />
+                                        <path d="M7 11V4a5 5 0 0 1 9.9 1" />
+                                        <circle cx="12" cy="16" r="1" fill="currentColor" />
+                                    </svg>
+                                )}
+                            </div>
+                            <div className={styles["provider-detail-content"]}>
+                                <span className={styles["provider-detail-label"]}>Security</span>
+                                <span className={styles["provider-detail-value"]}>
+                                    {provider.UseSsl ? "SSL Enabled" : "No SSL"}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className={styles["provider-detail-item"]}>
+                            <div className={styles["provider-detail-icon"]}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3">
+                                    <text x="12" y="9" fontSize="10" fill="currentColor" textAnchor="middle" fontWeight="600">1</text>
+                                    <text x="6" y="21" fontSize="10" fill="currentColor" textAnchor="middle" fontWeight="600">2</text>
+                                    <text x="18" y="21" fontSize="10" fill="currentColor" textAnchor="middle" fontWeight="600">3</text>
+                                </svg>
+                            </div>
+                            <div className={styles["provider-detail-content"]}>
+                                <span className={styles["provider-detail-label"]}>Behavior</span>
+                                <span className={styles["provider-detail-value"]}>{PROVIDER_TYPE_LABELS[provider.Type]}</span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <UsageRow
+                        provider={provider}
+                        usage={usage}
+                        onReset={onResetUsage}
+                    />
+                </div>
+            </div>
         </div>
     );
 }
@@ -455,11 +557,15 @@ type ProviderModalProps = {
     show: boolean;
     provider: ConnectionDetails | null;
     pipeliningMasterEnabled: boolean;
+    // Effective names of every OTHER provider (the one being edited excluded).
+    // A typed nickname must not collide with these, and an empty nickname
+    // auto-fills at save time with the host deduped against them.
+    otherEffectiveNames: string[];
     onClose: () => void;
     onSave: (provider: ConnectionDetails) => void;
 };
 
-function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSave }: ProviderModalProps) {
+function ProviderModal({ show, provider, pipeliningMasterEnabled, otherEffectiveNames, onClose, onSave }: ProviderModalProps) {
     const [nickname, setNickname] = useState(provider?.Nickname || "");
     const [dataCapGb, setDataCapGb] = useState(bytesToGbString(provider?.ByteLimit));
     const [host, setHost] = useState(provider?.Host || "");
@@ -467,6 +573,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
     const [useSsl, setUseSsl] = useState(provider?.UseSsl ?? true);
     const [user, setUser] = useState(provider?.User || "");
     const [pass, setPass] = useState(provider?.Pass || "");
+    const [showPass, setShowPass] = useState(false);
     const [maxConnections, setMaxConnections] = useState(provider?.MaxConnections?.toString() || "");
     const [type, setType] = useState<ProviderType>(provider?.Type ?? ProviderType.Pooled);
     const [statPipeliningEnabled, setStatPipeliningEnabled] = useState(provider?.StatPipeliningEnabled ?? false);
@@ -484,6 +591,20 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
         setPipeliningTestResult(null);
     };
 
+    // Nickname identity bookkeeping. Note that editing the nickname does NOT
+    // invalidate the connection/pipelining tests — it is a display label with
+    // no effect on connection identity (host/port/ssl/credentials).
+    const takenNamesLower = useMemo(
+        () => new Set(otherEffectiveNames.map(name => name.toLowerCase())),
+        [otherEffectiveNames]);
+    // What an empty nickname is saved as: the host, deduped against the other
+    // providers' effective names. Shown live as the field's placeholder.
+    const defaultNickname = useMemo(
+        () => host.trim() === "" ? "" : dedupeEffectiveName(host.trim(), takenNamesLower),
+        [host, takenNamesLower]);
+    const nicknameTaken = nickname.trim() !== ""
+        && takenNamesLower.has(nickname.trim().toLowerCase());
+
     // Reset form when modal opens or provider changes
     useEffect(() => {
         if (show) {
@@ -494,6 +615,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
             setUseSsl(provider?.UseSsl ?? true);
             setUser(provider?.User || "");
             setPass(provider?.Pass || "");
+            setShowPass(false);
             setMaxConnections(provider?.MaxConnections?.toString() || "");
             setType(provider?.Type ?? ProviderType.Pooled);
             setStatPipeliningEnabled(provider?.StatPipeliningEnabled ?? false);
@@ -593,7 +715,9 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
     }, [host, port, useSsl, user, pass]);
 
     const handleSave = useCallback(() => {
-        const trimmedNickname = nickname.trim();
+        // Nickname is effectively required: an empty field auto-fills with the
+        // deduped host so every saved provider carries an explicit unique name.
+        const trimmedNickname = nickname.trim() || defaultNickname;
         onSave({
             Type: type,
             Host: host,
@@ -611,7 +735,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
             BytesUsedOffset: provider?.BytesUsedOffset ?? 0,
             BytesUsedResetAt: provider?.BytesUsedResetAt ?? 0,
         });
-    }, [type, host, port, useSsl, user, pass, maxConnections, statPipeliningEnabled, nickname, dataCapGb, provider, onSave]);
+    }, [type, host, port, useSsl, user, pass, maxConnections, statPipeliningEnabled, nickname, defaultNickname, dataCapGb, provider, onSave]);
 
     const handleOverlayClick = useCallback((e: React.MouseEvent) => {
         if (e.target === e.currentTarget) {
@@ -624,7 +748,8 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
         && user.trim() !== ""
         && pass.trim() !== ""
         && isPositiveInteger(maxConnections)
-        && isValidDataCap(dataCapGb);
+        && isValidDataCap(dataCapGb)
+        && !nicknameTaken;
 
     const canSave = isFormValid && (connectionTested || type == ProviderType.Disabled);
 
@@ -646,19 +771,26 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
                     <div className={styles["form-grid"]}>
                         <div className={styles["form-group"]}>
                             <label htmlFor="provider-nickname" className={styles["form-label"]}>
-                                Nickname (optional)
+                                Nickname
                             </label>
                             <input
                                 type="text"
                                 id="provider-nickname"
-                                className={styles["form-input"]}
-                                placeholder="e.g. Main provider"
+                                className={`${styles["form-input"]} ${nicknameTaken ? styles.error : ""}`}
+                                placeholder={defaultNickname || "e.g. Main provider"}
                                 value={nickname}
                                 onChange={(e) => setNickname(e.target.value)}
                             />
-                            <div className={styles["form-hint"]}>
-                                Friendly label shown in place of the hostname.
-                            </div>
+                            {nicknameTaken ? (
+                                <div className={styles["form-hint-error"]}>
+                                    Name already in use.
+                                </div>
+                            ) : (
+                                <div className={styles["form-hint"]}>
+                                    Unique label shown in place of the hostname. Leave blank to
+                                    use {defaultNickname ? `"${defaultNickname}"` : "the hostname"}.
+                                </div>
+                            )}
                         </div>
 
                         <div className={styles["form-group"]}>
@@ -735,17 +867,40 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, onClose, onSav
                             <label htmlFor="provider-pass" className={styles["form-label"]}>
                                 Password
                             </label>
-                            <input
-                                type="password"
-                                id="provider-pass"
-                                className={styles["form-input"]}
-                                placeholder="password"
-                                value={pass}
-                                onChange={(e) => {
-                                    setPass(e.target.value);
-                                    invalidateConnectionTests();
-                                }}
-                            />
+                            <div className={styles["password-input-wrapper"]}>
+                                <input
+                                    type={showPass ? "text" : "password"}
+                                    id="provider-pass"
+                                    className={styles["form-input"]}
+                                    placeholder="password"
+                                    value={pass}
+                                    onChange={(e) => {
+                                        setPass(e.target.value);
+                                        invalidateConnectionTests();
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    className={styles["password-toggle"]}
+                                    onClick={() => setShowPass(v => !v)}
+                                    aria-label={showPass ? "Hide password" : "Show password"}
+                                    title={showPass ? "Hide password" : "Show password"}
+                                >
+                                    {showPass ? (
+                                        // Eye-off icon (password revealed; click to hide)
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                                            <line x1="1" y1="1" x2="23" y2="23" />
+                                        </svg>
+                                    ) : (
+                                        // Eye icon (password hidden; click to reveal)
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                            <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                    )}
+                                </button>
+                            </div>
                         </div>
 
                         <div className={styles["form-group"]}>

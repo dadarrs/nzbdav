@@ -70,6 +70,11 @@ declare const styles: {
   readonly "usage-bar-danger": string;
   readonly "usage-hint": string;
   readonly "usage-warning": string;
+  readonly "provider-section": string;
+  readonly "provider-section-title": string;
+  readonly "form-hint-error": string;
+  readonly "password-input-wrapper": string;
+  readonly "password-toggle": string;
 };
 export = styles;
 
