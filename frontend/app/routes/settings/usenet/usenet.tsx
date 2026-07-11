@@ -53,7 +53,7 @@ type UsenetProviderConfig = {
 
 const PROVIDER_TYPE_LABELS: Record<ProviderType, string> = {
     [ProviderType.Disabled]: "Disabled",
-    [ProviderType.Pooled]: "Pool Connections",
+    [ProviderType.Pooled]: "Pooled Providers",
     [ProviderType.BackupAndStats]: "Backup & Health Checks",
     [ProviderType.BackupOnly]: "Backup Only",
 };
@@ -180,7 +180,7 @@ export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSet
         return [
             {
                 key: "pooled",
-                title: "Pool Connections",
+                title: "Pooled Providers",
                 // Catch-all for non-backup, non-disabled so a provider with an
                 // unexpected Type value still renders somewhere.
                 items: indexed.filter(({ provider }) =>
@@ -928,7 +928,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, otherEffective
                                 onChange={(e) => setType(parseInt(e.target.value, 10) as ProviderType)}
                             >
                                 <option value={ProviderType.Disabled}>Disabled</option>
-                                <option value={ProviderType.Pooled}>Pool Connections</option>
+                                <option value={ProviderType.Pooled}>Pooled Providers</option>
                                 <option value={ProviderType.BackupAndStats}>Backup &amp; Health Checks</option>
                                 <option value={ProviderType.BackupOnly}>Backup Only</option>
                             </select>
