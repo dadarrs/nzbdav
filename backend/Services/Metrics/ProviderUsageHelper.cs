@@ -143,18 +143,19 @@ public static class ProviderUsageHelper
         try
         {
             await using var db = new MetricsDbContext();
-            // Distinct host so we don't issue duplicate queries for the unusual
-            // case where two ConnectionDetails entries share a Host.
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var provider in config.Providers)
+            // Metrics are keyed by the per-account effective name (nickname or deduped
+            // host), so multiple accounts on the same backbone track separately.
+            var names = config.GetEffectiveNames();
+            for (var i = 0; i < config.Providers.Count; i++)
             {
-                var host = provider.Host;
-                if (string.IsNullOrEmpty(host) || !seen.Add(host)) continue;
+                var provider = config.Providers[i];
+                var name = names[i];
+                if (string.IsNullOrEmpty(name)) continue;
                 var bytes = await db.ProviderHourly
-                    .Where(x => x.Provider == host && x.Hour >= provider.BytesUsedResetAt)
+                    .Where(x => x.Provider == name && x.Hour >= provider.BytesUsedResetAt)
                     .SumAsync(x => x.BytesFetched)
                     .ConfigureAwait(false);
-                tracker.SetLifetime(host, bytes);
+                tracker.SetLifetime(name, bytes);
             }
         }
         catch (Exception ex)
@@ -168,9 +169,12 @@ public static class ProviderUsageHelper
     /// Clamped to 0 so a negative offset (manual correction) never reports as
     /// a negative gauge value.
     /// </summary>
-    public static long ComputeUsage(ProviderBytesTracker tracker, UsenetProviderConfig.ConnectionDetails provider)
+    public static long ComputeUsage(
+        ProviderBytesTracker tracker,
+        UsenetProviderConfig.ConnectionDetails provider,
+        string? effectiveName = null)
     {
-        var live = tracker.GetLifetime(provider.Host);
+        var live = tracker.GetLifetime(effectiveName ?? provider.Host);
         return Math.Max(0, live + provider.BytesUsedOffset);
     }
 
@@ -179,11 +183,14 @@ public static class ProviderUsageHelper
     /// up to or passed the effective cutoff (configured limit × safety margin).
     /// A ByteLimit of null or 0 means "no cap".
     /// </summary>
-    public static bool IsOverLimit(ProviderBytesTracker tracker, UsenetProviderConfig.ConnectionDetails provider)
+    public static bool IsOverLimit(
+        ProviderBytesTracker tracker,
+        UsenetProviderConfig.ConnectionDetails provider,
+        string? effectiveName = null)
     {
         var limit = provider.ByteLimit;
         if (!limit.HasValue || limit.Value <= 0) return false;
         var effective = (long)(limit.Value * EffectiveLimitFraction);
-        return ComputeUsage(tracker, provider) >= effective;
+        return ComputeUsage(tracker, provider, effectiveName) >= effective;
     }
 }

@@ -14,24 +14,27 @@ public class GetProviderUsageController(
     private async Task<GetProviderUsageResponse> GetUsageAsync()
     {
         var providerConfig = configManager.GetUsenetProviderConfig();
-        var recentHoursByHost = await ProviderUsageHelper
-            .ReadRecentHoursAsync(providerConfig.Providers.Select(p => p.Host))
+        // metrics are keyed per-account by effective name (nickname or deduped host)
+        var effectiveNames = providerConfig.GetEffectiveNames();
+        var recentHoursByName = await ProviderUsageHelper
+            .ReadRecentHoursAsync(effectiveNames)
             .ConfigureAwait(false);
 
         var items = providerConfig.Providers
             .Select((provider, index) =>
             {
-                var used = ProviderUsageHelper.ComputeUsage(bytesTracker, provider);
-                recentHoursByHost.TryGetValue(provider.Host, out var recentHours);
+                var name = effectiveNames[index];
+                var used = ProviderUsageHelper.ComputeUsage(bytesTracker, provider, name);
+                recentHoursByName.TryGetValue(name, out var recentHours);
                 var (bytesPerDay, daysRemaining) = ProviderUsageHelper.ComputeBurnRate(provider, used, recentHours);
                 return new GetProviderUsageResponse.ProviderUsageItem
                 {
                     Index = index,
                     Host = provider.Host,
-                    Nickname = provider.Nickname,
+                    Nickname = name,
                     BytesUsed = used,
                     ByteLimit = provider.ByteLimit,
-                    OverLimit = ProviderUsageHelper.IsOverLimit(bytesTracker, provider),
+                    OverLimit = ProviderUsageHelper.IsOverLimit(bytesTracker, provider, name),
                     BytesPerDay = bytesPerDay,
                     DaysRemaining = daysRemaining,
                 };

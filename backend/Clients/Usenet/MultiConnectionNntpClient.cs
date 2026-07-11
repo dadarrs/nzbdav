@@ -30,11 +30,17 @@ public class MultiConnectionNntpClient(
     string providerName,
     bool statPipeliningEnabled = false,
     long? byteLimit = null,
-    long bytesUsedOffset = 0
+    long bytesUsedOffset = 0,
+    string? name = null
 ) : NntpClient
 {
     public ProviderType ProviderType { get; } = type;
     public string Host { get; } = providerName;
+
+    // Per-account identity for metrics/display (nickname or deduped host). Host stays the
+    // NNTP target; Name distinguishes multiple accounts on the same backbone.
+    public string Name { get; } = name ?? providerName;
+
     public bool StatPipeliningEnabled { get; } = statPipeliningEnabled;
     public long? ByteLimit { get; } = byteLimit;
     public long BytesUsedOffset { get; } = bytesUsedOffset;

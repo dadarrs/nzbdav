@@ -27,11 +27,25 @@
     border-radius: 8px;
 }
 
+.provider-section {
+    margin-bottom: 28px;
+}
+
+/* Grouping header above each provider-type section; matches the page's other
+   subtle uppercase labels (.provider-detail-label, .usage-label). */
+.provider-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 12px;
+}
+
 .providers-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
     gap: 20px;
-    margin-bottom: 28px;
 }
 
 .provider-card {
@@ -460,6 +474,13 @@
     line-height: 1.4;
 }
 
+.form-hint-error {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--danger);
+    line-height: 1.4;
+}
+
 .form-input {
     width: 100%;
     background: var(--bg-elevated);
@@ -492,6 +513,39 @@
 .form-input.error:focus {
     border-color: var(--danger);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 15%, transparent);
+}
+
+.password-input-wrapper {
+    position: relative;
+}
+
+/* Room for the reveal toggle so the text never runs underneath it. */
+.password-input-wrapper .form-input {
+    padding-right: 44px;
+}
+
+.password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.2s ease;
+}
+
+.password-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 .form-select {
