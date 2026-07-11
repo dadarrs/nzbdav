@@ -17,7 +17,7 @@ public class ArrClient(string host, string apiKey)
     public Task<ArrApiInfoResponse> GetApiInfo() =>
         GetRoot<ArrApiInfoResponse>($"/api");
 
-    public virtual Task<bool> RemoveAndSearch(string symlinkOrStrmPath) =>
+    public virtual Task<ArrRepairedMedia?> RemoveAndSearch(string symlinkOrStrmPath) =>
         throw new InvalidOperationException();
 
     public Task<List<ArrRootFolder>> GetRootFolders() =>

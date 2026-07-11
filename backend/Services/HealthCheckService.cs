@@ -1,10 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
+using NzbWebDAV.Clients.RadarrSonarr.BaseModels;
 using NzbWebDAV.Clients.Usenet;
 using NzbWebDAV.Clients.Usenet.Contexts;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
+using NzbWebDAV.Database.Models.Metrics;
 using NzbWebDAV.Exceptions;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Queue.PostProcessors;
@@ -273,7 +275,8 @@ public class HealthCheckService : BackgroundService
 
                 // if we found a corresponding arr instance,
                 // then remove and search.
-                if (await arrClient.RemoveAndSearch(symlinkOrStrmPath).ConfigureAwait(false))
+                var repairedMedia = await arrClient.RemoveAndSearch(symlinkOrStrmPath).ConfigureAwait(false);
+                if (repairedMedia != null)
                 {
                     dbClient.Ctx.Items.Remove(davItem);
                     dbClient.Ctx.HealthCheckResults.Add(SendStatus(new HealthCheckResult()
@@ -291,6 +294,7 @@ public class HealthCheckService : BackgroundService
                         ])
                     }));
                     await dbClient.Ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+                    await RecordRepairEventAsync(davItem, arrClient.Host, repairedMedia).ConfigureAwait(false);
                     return;
                 }
 
@@ -340,6 +344,34 @@ public class HealthCheckService : BackgroundService
                 Message = $"Error performing file repair: {e.Message}"
             }));
             await dbClient.Ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    // Best-effort: the repair already succeeded, so a metrics hiccup only costs the
+    // deep link on the health page, never the repair itself.
+    private static async Task RecordRepairEventAsync(
+        DavItem davItem, string arrHost, ArrRepairedMedia repairedMedia)
+    {
+        try
+        {
+            await using var metrics = new MetricsDbContext();
+            metrics.RepairEvents.Add(new RepairEvent
+            {
+                Id = Guid.NewGuid(),
+                At = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                DavItemId = davItem.Id,
+                Path = davItem.Path,
+                ArrKind = repairedMedia.Kind,
+                ArrHost = arrHost,
+                ArrItemId = repairedMedia.ItemId,
+                ArrTitleSlug = repairedMedia.TitleSlug,
+                ArrTitle = repairedMedia.Title,
+            });
+            await metrics.SaveChangesAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to record repair event for {Path}", davItem.Path);
         }
     }
 

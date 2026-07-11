@@ -4,6 +4,7 @@ import { backendClient, type HealthCheckHistoryResponse, type HealthCheckQueueRe
 import { HealthTable } from "./components/health-table/health-table";
 import { HealthHistory } from "./components/health-history/health-history";
 import { HealthStats } from "./components/health-stats/health-stats";
+import { RepairDetails } from "./components/repair-details/repair-details";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { receiveMessage } from "~/utils/websocket-util";
 import { Alert } from "react-bootstrap";
@@ -61,6 +62,12 @@ export default function Health({ loaderData }: Route.ComponentProps) {
     const [isTriggering, setIsTriggering] = useState(false);
     const [showRepairDisabledWarning, setShowRepairDisabledWarning] = useState(false);
     const [triggerError, setTriggerError] = useState<string | null>(null);
+    // which repair-action browse section is open (RepairAction value), if any
+    const [repairFilter, setRepairFilter] = useState<number | null>(null);
+
+    const onRepairFilterToggle = useCallback((repairAction: number) => {
+        setRepairFilter(current => current === repairAction ? null : repairAction);
+    }, []);
 
     const queueTotalPages = Math.max(1, Math.ceil(queueTotalCount / queuePageSize));
     const historyTotalPages = Math.max(1, Math.ceil(historyTotalCount / historyPageSize));
@@ -302,8 +309,20 @@ export default function Health({ loaderData }: Route.ComponentProps) {
     return (
         <div className={styles.container}>
             <div className={styles.section}>
-                <HealthStats stats={historyStats} />
+                <HealthStats
+                    stats={historyStats}
+                    activeFilter={repairFilter}
+                    onFilterToggle={onRepairFilterToggle}
+                />
             </div>
+            {repairFilter !== null &&
+                <div className={styles.section}>
+                    <RepairDetails
+                        filter={repairFilter}
+                        onClose={() => setRepairFilter(null)}
+                    />
+                </div>
+            }
             {isEnabled && uncheckedCount > 20 &&
                 <Alert className={styles.alert} variant={'warning'}>
                     <b>Attention</b>

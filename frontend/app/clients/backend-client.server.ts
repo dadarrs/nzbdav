@@ -356,9 +356,17 @@ export type HealthCheckQueueItem = {
 export type HealthCheckHistoryResponse = {
     stats: HealthCheckStats[],
     items: HealthCheckResult[],
+    // deep links for repaired rows, keyed by HealthCheckResult id
+    arrLinks?: Record<string, ArrLink>,
     totalCount: number,
     page: number,
     pageSize: number,
+}
+
+export type ArrLink = {
+    url: string,
+    title: string | null,
+    kind: "radarr" | "sonarr",
 }
 
 export type HealthCheckStats = {

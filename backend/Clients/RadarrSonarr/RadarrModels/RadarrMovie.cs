@@ -10,6 +10,9 @@ public class RadarrMovie
     [JsonPropertyName("title")]
     public string? Title { get; set; }
 
+    [JsonPropertyName("titleSlug")]
+    public string? TitleSlug { get; set; }
+
     [JsonPropertyName("movieFile")]
     public RadarrMovieFile? MovieFile { get; set; }
 }

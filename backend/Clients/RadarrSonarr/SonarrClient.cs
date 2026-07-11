@@ -34,11 +34,11 @@ public class SonarrClient(string host, string apiKey) : ArrClient(host, apiKey)
     public Task<ArrCommand> SearchEpisodesAsync(List<int> episodeIds) =>
         CommandAsync(new { name = "EpisodeSearch", episodeIds });
 
-    public override async Task<bool> RemoveAndSearch(string symlinkOrStrmPath)
+    public override async Task<ArrRepairedMedia?> RemoveAndSearch(string symlinkOrStrmPath)
     {
-        // get episode-file-id and episode-ids
+        // get episode-file-id, episode-ids, and series-id
         var mediaIds = await GetMediaIds(symlinkOrStrmPath);
-        if (mediaIds == null) return false;
+        if (mediaIds == null) return null;
 
         // delete the episode-file
         if (await DeleteEpisodeFile(mediaIds.Value.episodeFileId) != HttpStatusCode.OK)
@@ -46,10 +46,29 @@ public class SonarrClient(string host, string apiKey) : ArrClient(host, apiKey)
 
         // trigger a new search for each episode
         await SearchEpisodesAsync(mediaIds.Value.episodeIds);
-        return true;
+
+        // resolve the series for deep-link info. The repair itself already succeeded,
+        // so a failure here only costs the link, not the repair.
+        SonarrSeries? series = null;
+        try
+        {
+            series = await GetSeries(mediaIds.Value.seriesId);
+        }
+        catch
+        {
+            // link enrichment only
+        }
+
+        return new ArrRepairedMedia
+        {
+            Kind = ArrRepairedMedia.SonarrKind,
+            ItemId = mediaIds.Value.seriesId,
+            TitleSlug = series?.TitleSlug,
+            Title = series?.Title,
+        };
     }
 
-    private async Task<(int episodeFileId, List<int> episodeIds)?> GetMediaIds(string symlinkOrStrmPath)
+    private async Task<(int episodeFileId, List<int> episodeIds, int seriesId)?> GetMediaIds(string symlinkOrStrmPath)
     {
         // get episode-file-id
         var episodeFileId = await GetEpisodeFileId(symlinkOrStrmPath);
@@ -61,7 +80,7 @@ public class SonarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         if (episodeIds.Count == 0) return null;
 
         // return
-        return (episodeFileId.Value, episodeIds);
+        return (episodeFileId.Value, episodeIds, episodes[0].SeriesId);
     }
 
     private async Task<int?> GetEpisodeFileId(string symlinkOrStrmPath)

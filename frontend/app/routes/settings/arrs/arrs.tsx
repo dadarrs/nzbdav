@@ -10,6 +10,7 @@ type ArrsSettingsProps = {
 interface ConnectionDetails {
     Host: string;
     ApiKey: string;
+    PublicUrl?: string;
 }
 
 interface QueueRule {
@@ -342,6 +343,19 @@ function InstanceForm({ instance, index, type, onUpdate, onRemove }: InstanceFor
                         value={instance.ApiKey}
                         onChange={e => onUpdate(index, 'ApiKey', e.target.value)} />
                 </Form.Group>
+                <Form.Group>
+                    <Form.Label>Public URL <span className={styles.optionalLabel}>(optional)</span></Form.Label>
+                    <Form.Control
+                        type="text"
+                        className={styles.input}
+                        placeholder={type === "radarr" ? "https://radarr.mydomain.com" : "https://sonarr.mydomain.com"}
+                        value={instance.PublicUrl ?? ""}
+                        onChange={e => onUpdate(index, 'PublicUrl', e.target.value)} />
+                    <Form.Text muted>
+                        Used for clickable links in the UI (e.g. repaired items on the Health page),
+                        so they work from outside your network. API calls always use the Host above.
+                    </Form.Text>
+                </Form.Group>
             </Card.Body>
         </Card>
     );
@@ -360,6 +374,7 @@ export function isArrsSettingsValid(newConfig: Record<string, string>) {
             if (!isValidHost(instance.Host) || !isValidApiKey(instance.ApiKey)) {
                 return false;
             }
+            if (!isValidOptionalUrl(instance.PublicUrl)) return false;
         }
 
         // Validate all Sonarr instances
@@ -367,6 +382,7 @@ export function isArrsSettingsValid(newConfig: Record<string, string>) {
             if (!isValidHost(instance.Host) || !isValidApiKey(instance.ApiKey)) {
                 return false;
             }
+            if (!isValidOptionalUrl(instance.PublicUrl)) return false;
         }
 
         return true;
@@ -387,4 +403,14 @@ function isValidHost(host: string): boolean {
 
 function isValidApiKey(apiKey: string): boolean {
     return apiKey.trim().length > 0;
+}
+
+function isValidOptionalUrl(url: string | undefined): boolean {
+    if (!url || url.trim().length === 0) return true;
+    try {
+        new URL(url);
+        return true;
+    } catch {
+        return false;
+    }
 }

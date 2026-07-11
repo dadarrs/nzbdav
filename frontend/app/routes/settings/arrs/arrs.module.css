@@ -93,3 +93,9 @@
     color: white;
     font-size: 14px;
 }
+
+.optionalLabel {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: normal;
+}

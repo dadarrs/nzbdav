@@ -3,6 +3,9 @@ import type { HealthCheckStats } from "~/clients/backend-client.server";
 
 export type HealthStatsProps = {
     stats: HealthCheckStats[];
+    // which repair-action browse section is open (RepairAction.Repaired/Deleted), if any
+    activeFilter: number | null;
+    onFilterToggle: (repairAction: number) => void;
 }
 
 enum HealthResult {
@@ -17,7 +20,7 @@ enum RepairAction {
     ActionNeeded = 3,
 }
 
-export function HealthStats({ stats }: HealthStatsProps) {
+export function HealthStats({ stats, activeFilter, onFilterToggle }: HealthStatsProps) {
     // Calculate totals from HealthCheckStats array
     const totalChecked = stats
         .reduce((sum, stat) => sum + stat.count, 0);
@@ -55,15 +58,25 @@ export function HealthStats({ stats }: HealthStatsProps) {
                     <div className={styles.statLabel}>Healthy ({getPercentage(healthy)}%)</div>
                 </div>
 
-                <div className={styles.statCard}>
+                <button
+                    type="button"
+                    className={`${styles.statCard} ${styles.clickableCard} ${activeFilter === RepairAction.Repaired ? styles.activeCard : ""}`}
+                    onClick={() => onFilterToggle(RepairAction.Repaired)}
+                    title="Show which files were repaired"
+                >
                     <div className={styles.statNumber} style={{ color: 'var(--accent)' }}>{repaired}</div>
                     <div className={styles.statLabel}>Repaired ({getPercentage(repaired)}%)</div>
-                </div>
+                </button>
 
-                <div className={styles.statCard}>
+                <button
+                    type="button"
+                    className={`${styles.statCard} ${styles.clickableCard} ${activeFilter === RepairAction.Deleted ? styles.activeCard : ""}`}
+                    onClick={() => onFilterToggle(RepairAction.Deleted)}
+                    title="Show which files were deleted"
+                >
                     <div className={styles.statNumber} style={{ color: 'var(--danger)' }}>{deleted}</div>
                     <div className={styles.statLabel}>Deleted ({getPercentage(deleted)}%)</div>
-                </div>
+                </button>
             </div>
         </div>
     );
