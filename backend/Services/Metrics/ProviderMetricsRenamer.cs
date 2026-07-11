@@ -54,6 +54,51 @@ public static class ProviderMetricsRenamer
     }
 
     /// <summary>
+    /// Merges metric rows stranded under an account's bare hostname into its current
+    /// effective name. Rows written before per-account identity existed were keyed by
+    /// host only, so a scoreboard could show the same account twice: once under its
+    /// nickname and once under its old host key. Legacy rows carry no username, so the
+    /// first configured account with a given host claims them -- shared-host history
+    /// was lumped together when it was written and cannot be split retroactively.
+    /// Skips hosts that are still a live identity (an unnamed provider keeps its plain
+    /// hostname as its effective name). Idempotent: once merged, nothing matches again.
+    /// </summary>
+    public static async Task ReconcileLegacyHostRowsAsync(UsenetProviderConfig config)
+    {
+        try
+        {
+            var effectiveNames = config.GetEffectiveNames();
+            var effectiveSet = new HashSet<string>(effectiveNames, StringComparer.OrdinalIgnoreCase);
+            var claimedHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < config.Providers.Count; i++)
+            {
+                var host = config.Providers[i].Host;
+                if (string.IsNullOrWhiteSpace(host)) continue;
+                if (!claimedHosts.Add(host)) continue;
+                if (effectiveSet.Contains(host)) continue;
+
+                bool hasLegacyRows;
+                await using (var db = new MetricsDbContext())
+                {
+                    hasLegacyRows =
+                        await db.ProviderHourly.AnyAsync(x => x.Provider == host).ConfigureAwait(false) ||
+                        await db.ProviderMinutes.AnyAsync(x => x.Provider == host).ConfigureAwait(false) ||
+                        await db.FailoverHourly
+                            .AnyAsync(x => x.FromProvider == host || x.ToProvider == host)
+                            .ConfigureAwait(false);
+                }
+
+                if (!hasLegacyRows) continue;
+                await RenameAsync(host, effectiveNames[i]).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to reconcile legacy host-keyed provider metrics");
+        }
+    }
+
+    /// <summary>
     /// Migrates every metric row from oldName to newName. The rollup tables key on
     /// (bucket, provider), so a plain UPDATE would collide when the new name already
     /// has rows for the same bucket; those are merged additively instead (histogram

@@ -143,10 +143,20 @@ public class UsenetStreamingClient : WrappingNntpClient
         var providerConfig = configManager.GetUsenetProviderConfig();
 
         // Seed the byte tracker from the persisted metrics rollup so the data-cap gate is
-        // accurate before the first article fetch. Fire-and-forget: the helper logs and
-        // swallows DB errors, so limit enforcement degrades to "uncapped until seeded".
+        // accurate before the first article fetch. Metric rows stranded under a legacy
+        // host key are folded into the account's current effective name first, so both
+        // the seed and the dashboard see one identity per account. Fire-and-forget: both
+        // helpers log and swallow DB errors, so limit enforcement degrades to "uncapped
+        // until seeded".
         if (bytesTracker != null)
-            _ = ProviderUsageHelper.SeedTrackerAsync(bytesTracker, providerConfig);
+        {
+            var trackerToSeed = bytesTracker;
+            _ = Task.Run(async () =>
+            {
+                await ProviderMetricsRenamer.ReconcileLegacyHostRowsAsync(providerConfig).ConfigureAwait(false);
+                await ProviderUsageHelper.SeedTrackerAsync(trackerToSeed, providerConfig).ConfigureAwait(false);
+            });
+        }
 
         var connectionPoolStats = new ConnectionPoolStats(
             providerConfig,
