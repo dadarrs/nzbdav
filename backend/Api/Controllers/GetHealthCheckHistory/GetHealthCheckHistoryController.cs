@@ -49,10 +49,43 @@ public class GetHealthCheckHistoryController(DavDatabaseClient dbClient, ConfigM
             Stats = await statsPromise.ConfigureAwait(false),
             Items = items,
             ArrLinks = await BuildArrLinksAsync(items).ConfigureAwait(false),
+            RepairWindowStats = await BuildRepairWindowStatsAsync().ConfigureAwait(false),
             TotalCount = totalCount,
             Page = request.Page,
             PageSize = request.PageSize,
         };
+    }
+
+    /// <summary>
+    /// Repaired/deleted counts for the 7/30/365-day lookback windows. One query for
+    /// the widest window, bucketed in memory -- repair actions are rare events, so
+    /// a year of them stays small.
+    /// </summary>
+    private async Task<List<GetHealthCheckHistoryResponse.RepairWindowStat>> BuildRepairWindowStatsAsync()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var widestCutoff = now.AddDays(-365);
+        var rows = await dbClient.Ctx.HealthCheckResults
+            .Where(x => x.CreatedAt >= widestCutoff &&
+                        (x.RepairStatus == HealthCheckResult.RepairAction.Repaired ||
+                         x.RepairStatus == HealthCheckResult.RepairAction.Deleted))
+            .Select(x => new { x.CreatedAt, x.RepairStatus })
+            .ToListAsync().ConfigureAwait(false);
+
+        return new[] { 7, 30, 365 }
+            .Select(windowDays =>
+            {
+                var cutoff = now.AddDays(-windowDays);
+                return new GetHealthCheckHistoryResponse.RepairWindowStat
+                {
+                    WindowDays = windowDays,
+                    Repaired = rows.Count(r => r.CreatedAt >= cutoff &&
+                        r.RepairStatus == HealthCheckResult.RepairAction.Repaired),
+                    Deleted = rows.Count(r => r.CreatedAt >= cutoff &&
+                        r.RepairStatus == HealthCheckResult.RepairAction.Deleted),
+                };
+            })
+            .ToList();
     }
 
     /// <summary>

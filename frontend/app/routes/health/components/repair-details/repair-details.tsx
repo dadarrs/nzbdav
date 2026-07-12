@@ -6,7 +6,6 @@ import { Truncate } from "~/routes/queue/components/truncate/truncate";
 import styles from "./repair-details.module.css";
 
 const pageSize = 20;
-const windowDays = 30;
 
 // mirrors RepairAction in backend-client.server.ts, which is server-only
 // and can't be imported as a value into client components
@@ -15,28 +14,30 @@ const repairedAction = 1;
 export type RepairDetailsProps = {
     // RepairAction.Repaired or RepairAction.Deleted
     filter: number,
+    windowDays: number,
     onClose: () => void,
 }
 
-export function RepairDetails({ filter, onClose }: RepairDetailsProps) {
+export function RepairDetails({ filter, windowDays, onClose }: RepairDetailsProps) {
     const [items, setItems] = useState<HealthCheckResult[] | null>(null);
     const [arrLinks, setArrLinks] = useState<Record<string, ArrLink>>({});
     const [totalCount, setTotalCount] = useState(0);
     const [page, setPage] = useState(1);
 
     const title = filter === repairedAction ? "Repaired" : "Deleted";
+    const windowLabel = windowDays >= 365 ? "year" : `${windowDays} days`;
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
     // drop out-of-order responses when the filter or page flips quickly
     const fetchSeq = useRef(0);
-    const fetchPage = useCallback(async (filterToLoad: number, pageToLoad: number) => {
+    const fetchPage = useCallback(async (filterToLoad: number, windowToLoad: number, pageToLoad: number) => {
         const seq = ++fetchSeq.current;
         try {
             const params = new URLSearchParams({
                 page: String(pageToLoad),
                 pageSize: String(pageSize),
                 repairStatus: String(filterToLoad),
-                windowDays: String(windowDays),
+                windowDays: String(windowToLoad),
             });
             const response = await fetch(`/api/get-health-check-history?${params}`);
             if (!response.ok) return;
@@ -53,13 +54,13 @@ export function RepairDetails({ filter, onClose }: RepairDetailsProps) {
     useEffect(() => {
         setPage(1);
         setItems(null);
-        fetchPage(filter, 1);
-    }, [filter, fetchPage]);
+        fetchPage(filter, windowDays, 1);
+    }, [filter, windowDays, fetchPage]);
 
     const onPageSelected = useCallback((newPage: number) => {
         setPage(newPage);
-        fetchPage(filter, newPage);
-    }, [filter, fetchPage]);
+        fetchPage(filter, windowDays, newPage);
+    }, [filter, windowDays, fetchPage]);
 
     return (
         <div className={styles.container}>
@@ -69,7 +70,7 @@ export function RepairDetails({ filter, onClose }: RepairDetailsProps) {
                     <div className={styles.sub}>
                         {items === null
                             ? "Loading…"
-                            : `${totalCount} file${totalCount === 1 ? "" : "s"} · last ${windowDays} days`}
+                            : `${totalCount} file${totalCount === 1 ? "" : "s"} · last ${windowLabel}`}
                     </div>
                 </div>
                 <button
@@ -84,7 +85,7 @@ export function RepairDetails({ filter, onClose }: RepairDetailsProps) {
 
             {items !== null && items.length === 0 && (
                 <div className={styles.empty}>
-                    No files were {title.toLowerCase()} in the last {windowDays} days.
+                    No files were {title.toLowerCase()} in the last {windowLabel}.
                 </div>
             )}
 
