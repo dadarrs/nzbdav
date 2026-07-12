@@ -21,6 +21,11 @@ public class ArrConfig
     {
         public required string Host { get; set; }
         public required string ApiKey { get; set; }
+
+        // Optional externally-reachable URL for this instance (e.g. a reverse-proxy
+        // hostname). Used only to build clickable links in the UI; API calls always
+        // go through Host. Optional so configs saved before this existed still load.
+        public string? PublicUrl { get; set; }
     }
 
     public class QueueRule

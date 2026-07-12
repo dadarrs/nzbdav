@@ -24,19 +24,55 @@ public class RadarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         CommandAsync(new { name = "MoviesSearch", movieIds = new List<int> { id } });
 
 
-    public override async Task<bool> RemoveAndSearch(string symlinkOrStrmPath)
+    public override async Task<ArrRepairedMedia?> RemoveAndSearch(string symlinkOrStrmPath)
     {
-        var mediaIds = await GetMediaIds(symlinkOrStrmPath);
-        if (mediaIds == null) return false;
+        var media = await GetMedia(symlinkOrStrmPath);
+        if (media == null) return null;
 
-        if (await DeleteMovieFile(mediaIds.Value.movieFileId) != HttpStatusCode.OK)
+        if (await DeleteMovieFile(media.Value.movieFileId) != HttpStatusCode.OK)
             throw new Exception($"Failed to delete movie file `{symlinkOrStrmPath}` from radarr instance `{Host}`.");
 
-        await SearchMovieAsync(mediaIds.Value.movieId);
-        return true;
+        await SearchMovieAsync(media.Value.movie.Id);
+        return new ArrRepairedMedia
+        {
+            Kind = ArrRepairedMedia.RadarrKind,
+            ItemId = media.Value.movie.Id,
+            TitleSlug = media.Value.movie.TitleSlug,
+            Title = media.Value.movie.Title,
+        };
     }
 
-    private async Task<(int movieFileId, int movieId)?> GetMediaIds(string symlinkOrStrmPath)
+    public override async Task<ArrRepairedMedia?> TryIdentify(string symlinkOrStrmPath)
+    {
+        // prefer the exact movie-file match when radarr still has the file
+        var media = await GetMedia(symlinkOrStrmPath);
+        var movie = media?.movie;
+
+        // otherwise match by movie folder, which survives the file's deletion
+        if (movie == null)
+        {
+            foreach (var candidate in await GetMoviesAsync())
+            {
+                var folder = candidate.Path?.TrimEnd('/');
+                if (folder != null && symlinkOrStrmPath.StartsWith($"{folder}/"))
+                {
+                    movie = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (movie == null) return null;
+        return new ArrRepairedMedia
+        {
+            Kind = ArrRepairedMedia.RadarrKind,
+            ItemId = movie.Id,
+            TitleSlug = movie.TitleSlug,
+            Title = movie.Title,
+        };
+    }
+
+    private async Task<(int movieFileId, RadarrMovie movie)?> GetMedia(string symlinkOrStrmPath)
     {
         // if we already have the movie-id cached
         // then let's use it to find and return the corresponding movie-file-id
@@ -44,20 +80,20 @@ public class RadarrClient(string host, string apiKey) : ArrClient(host, apiKey)
         {
             var movie = await GetMovieAsync(movieId);
             if (movie.MovieFile?.Path == symlinkOrStrmPath)
-                return (movie.MovieFile.Id!, movieId);
+                return (movie.MovieFile.Id!, movie);
         }
 
         // otherwise, let's fetch all movies, cache all movie files
-        // and return the matching movie-id and movie-file-id
+        // and return the matching movie and movie-file-id
         var allMovies = await GetMoviesAsync();
-        (int movieFileId, int movieId)? result = null;
+        (int movieFileId, RadarrMovie movie)? result = null;
         foreach (var movie in allMovies)
         {
             var movieFile = movie.MovieFile;
             if (movieFile?.Path != null)
                 SymlinkOrStrmToMovieIdCache[movieFile.Path] = movie.Id;
             if (movieFile?.Path == symlinkOrStrmPath)
-                result = (movieFile.Id!, movie.Id);
+                result = (movieFile.Id!, movie);
         }
 
         return result;

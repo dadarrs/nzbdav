@@ -10,6 +10,9 @@ public class SonarrSeries
     [JsonPropertyName("title")]
     public string? Title { get; set; }
 
+    [JsonPropertyName("titleSlug")]
+    public string? TitleSlug { get; set; }
+
     [JsonPropertyName("path")]
     public string? Path { get; set; }
 }

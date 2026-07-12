@@ -52,6 +52,23 @@
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
+.clickableCard {
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    width: 100%;
+}
+
+.clickableCard:hover {
+    background-color: var(--bg-surface-2);
+}
+
+.activeCard {
+    background-color: var(--bg-surface-2);
+    box-shadow: inset 0 -2px 0 var(--accent);
+}
+
 .statNumber {
     font-size: 2.5em;
     font-weight: 700;

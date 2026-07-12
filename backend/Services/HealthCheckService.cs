@@ -1,10 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
+using NzbWebDAV.Clients.RadarrSonarr.BaseModels;
 using NzbWebDAV.Clients.Usenet;
 using NzbWebDAV.Clients.Usenet.Contexts;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
+using NzbWebDAV.Database.Models.Metrics;
 using NzbWebDAV.Exceptions;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Queue.PostProcessors;
@@ -266,14 +268,16 @@ public class HealthCheckService : BackgroundService
             // if the unhealthy item is linked within the organized media-library
             // then we must find the corresponding arr instance and trigger a new search.
             var linkType = symlinkOrStrmPath.ToLower().EndsWith("strm") ? "strm-file" : "symlink";
-            foreach (var arrClient in _configManager.GetArrConfig().GetArrClients())
+            var arrClients = _configManager.GetArrConfig().GetArrClients().ToList();
+            foreach (var arrClient in arrClients)
             {
                 var rootFolders = await arrClient.GetRootFolders().ConfigureAwait(false);
                 if (!rootFolders.Any(x => symlinkOrStrmPath.StartsWith(x.Path!))) continue;
 
                 // if we found a corresponding arr instance,
                 // then remove and search.
-                if (await arrClient.RemoveAndSearch(symlinkOrStrmPath).ConfigureAwait(false))
+                var repairedMedia = await arrClient.RemoveAndSearch(symlinkOrStrmPath).ConfigureAwait(false);
+                if (repairedMedia != null)
                 {
                     dbClient.Ctx.Items.Remove(davItem);
                     dbClient.Ctx.HealthCheckResults.Add(SendStatus(new HealthCheckResult()
@@ -291,6 +295,7 @@ public class HealthCheckService : BackgroundService
                         ])
                     }));
                     await dbClient.Ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+                    await RecordRepairEventAsync(davItem, arrClient.Host, repairedMedia).ConfigureAwait(false);
                     return;
                 }
 
@@ -321,6 +326,27 @@ public class HealthCheckService : BackgroundService
                 ])
             }));
             await dbClient.Ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            // The library item (movie/series) usually still exists in an arr even though
+            // the file-level lookup failed -- e.g. the file was already replaced, or path
+            // mappings differ. Identify it by folder so the deleted row can still link to
+            // the item page, where a manual search can be triggered. Best-effort.
+            foreach (var arrClient in arrClients)
+            {
+                ArrRepairedMedia? deletedMedia = null;
+                try
+                {
+                    deletedMedia = await arrClient.TryIdentify(symlinkOrStrmPath).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // link enrichment only; never fail the completed deletion
+                }
+
+                if (deletedMedia == null) continue;
+                await RecordRepairEventAsync(davItem, arrClient.Host, deletedMedia).ConfigureAwait(false);
+                break;
+            }
         }
         catch (Exception e)
         {
@@ -340,6 +366,34 @@ public class HealthCheckService : BackgroundService
                 Message = $"Error performing file repair: {e.Message}"
             }));
             await dbClient.Ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    // Best-effort: the repair already succeeded, so a metrics hiccup only costs the
+    // deep link on the health page, never the repair itself.
+    private static async Task RecordRepairEventAsync(
+        DavItem davItem, string arrHost, ArrRepairedMedia repairedMedia)
+    {
+        try
+        {
+            await using var metrics = new MetricsDbContext();
+            metrics.RepairEvents.Add(new RepairEvent
+            {
+                Id = Guid.NewGuid(),
+                At = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                DavItemId = davItem.Id,
+                Path = davItem.Path,
+                ArrKind = repairedMedia.Kind,
+                ArrHost = arrHost,
+                ArrItemId = repairedMedia.ItemId,
+                ArrTitleSlug = repairedMedia.TitleSlug,
+                ArrTitle = repairedMedia.Title,
+            });
+            await metrics.SaveChangesAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to record repair event for {Path}", davItem.Path);
         }
     }
 

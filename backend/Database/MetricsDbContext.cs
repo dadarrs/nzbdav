@@ -34,6 +34,7 @@ public sealed class MetricsDbContext() : DbContext(Options.Value)
     public DbSet<FailoverMiss> FailoverMisses => Set<FailoverMiss>();
     public DbSet<FailoverHourly> FailoverHourly => Set<FailoverHourly>();
     public DbSet<CatalogueDaily> CatalogueDaily => Set<CatalogueDaily>();
+    public DbSet<RepairEvent> RepairEvents => Set<RepairEvent>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -158,6 +159,20 @@ public sealed class MetricsDbContext() : DbContext(Options.Value)
             e.Property(x => x.TotalBytes).IsRequired();
             e.Property(x => x.AddedCount).IsRequired();
             e.Property(x => x.RemovedCount).IsRequired();
+        });
+
+        b.Entity<RepairEvent>(e =>
+        {
+            e.ToTable("RepairEvents");
+            e.HasKey(x => x.Id);
+
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.At).IsRequired();
+            e.Property(x => x.Path).IsRequired();
+            e.Property(x => x.ArrKind).IsRequired().HasMaxLength(16);
+            e.Property(x => x.ArrHost).IsRequired().HasMaxLength(255);
+
+            e.HasIndex(x => x.DavItemId);
         });
     }
 }
