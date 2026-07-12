@@ -3,7 +3,7 @@ import styles from "./route.module.css"
 import { backendClient, type HealthCheckHistoryResponse, type HealthCheckQueueResponse } from "~/clients/backend-client.server";
 import { HealthTable } from "./components/health-table/health-table";
 import { HealthHistory } from "./components/health-history/health-history";
-import { HealthStats, type RepairBrowseTarget } from "./components/health-stats/health-stats";
+import { HealthStats } from "./components/health-stats/health-stats";
 import { RepairDetails } from "./components/repair-details/repair-details";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { receiveMessage } from "~/utils/websocket-util";
@@ -35,7 +35,6 @@ export async function loader() {
         queueItems: queueData.items,
         queueTotalCount: queueData.totalCount,
         historyStats: historyData.stats,
-        repairWindowStats: historyData.repairWindowStats ?? [],
         historyItems: historyData.items,
         historyTotalCount: historyData.totalCount,
         isEnabled: config
@@ -48,7 +47,6 @@ export async function loader() {
 export default function Health({ loaderData }: Route.ComponentProps) {
     const { isEnabled } = loaderData;
     const [historyStats, setHistoryStats] = useState(loaderData.historyStats);
-    const [repairWindows, setRepairWindows] = useState(loaderData.repairWindowStats);
     const [queueItems, setQueueItems] = useState(loaderData.queueItems);
     const [queueTotalCount, setQueueTotalCount] = useState(loaderData.queueTotalCount);
     const [uncheckedCount, setUncheckedCount] = useState(loaderData.uncheckedCount);
@@ -64,14 +62,11 @@ export default function Health({ loaderData }: Route.ComponentProps) {
     const [isTriggering, setIsTriggering] = useState(false);
     const [showRepairDisabledWarning, setShowRepairDisabledWarning] = useState(false);
     const [triggerError, setTriggerError] = useState<string | null>(null);
-    // which repair-action browse section is open (action + lookback window), if any
-    const [repairTarget, setRepairTarget] = useState<RepairBrowseTarget | null>(null);
+    // which repair-action browse section is open (RepairAction value), if any
+    const [repairFilter, setRepairFilter] = useState<number | null>(null);
 
-    const onRepairTargetToggle = useCallback((target: RepairBrowseTarget) => {
-        setRepairTarget(current =>
-            current?.action === target.action && current?.windowDays === target.windowDays
-                ? null
-                : target);
+    const onRepairFilterToggle = useCallback((repairAction: number) => {
+        setRepairFilter(current => current === repairAction ? null : repairAction);
     }, []);
 
     const queueTotalPages = Math.max(1, Math.ceil(queueTotalCount / queuePageSize));
@@ -110,7 +105,6 @@ export default function Health({ loaderData }: Route.ComponentProps) {
             setHistoryItems(body.items);
             setHistoryTotalCount(body.totalCount);
             setHistoryStats(body.stats);
-            setRepairWindows(body.repairWindowStats ?? []);
         } catch {
             // transient fetch errors just leave the previous page on screen
         }
@@ -269,15 +263,6 @@ export default function Health({ loaderData }: Route.ComponentProps) {
             // if an update occurred, return the modified array
             return newStats;
         });
-        // a just-finished repair/deletion falls inside every lookback window
-        const repairActionNum = Number(repairAction);
-        if (repairActionNum === 1 || repairActionNum === 2) {
-            setRepairWindows(windows => windows.map(w => ({
-                ...w,
-                repaired: w.repaired + (repairActionNum === 1 ? 1 : 0),
-                deleted: w.deleted + (repairActionNum === 2 ? 1 : 0),
-            })));
-        }
     }, [setQueueItems, setHistoryStats]);
 
     const onHealthItemProgress = useCallback((message: string) => {
@@ -326,17 +311,15 @@ export default function Health({ loaderData }: Route.ComponentProps) {
             <div className={styles.section}>
                 <HealthStats
                     stats={historyStats}
-                    repairWindows={repairWindows}
-                    activeTarget={repairTarget}
-                    onTargetToggle={onRepairTargetToggle}
+                    activeFilter={repairFilter}
+                    onFilterToggle={onRepairFilterToggle}
                 />
             </div>
-            {repairTarget !== null &&
+            {repairFilter !== null &&
                 <div className={styles.section}>
                     <RepairDetails
-                        filter={repairTarget.action}
-                        windowDays={repairTarget.windowDays}
-                        onClose={() => setRepairTarget(null)}
+                        filter={repairFilter}
+                        onClose={() => setRepairFilter(null)}
                     />
                 </div>
             }

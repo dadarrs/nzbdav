@@ -358,8 +358,6 @@ export type HealthCheckHistoryResponse = {
     items: HealthCheckResult[],
     // deep links for repaired rows, keyed by HealthCheckResult id
     arrLinks?: Record<string, ArrLink>,
-    // repaired/deleted counts per lookback window (7/30/365 days)
-    repairWindowStats?: RepairWindowStat[],
     totalCount: number,
     page: number,
     pageSize: number,
@@ -369,12 +367,6 @@ export type ArrLink = {
     url: string,
     title: string | null,
     kind: "radarr" | "sonarr",
-}
-
-export type RepairWindowStat = {
-    windowDays: number,
-    repaired: number,
-    deleted: number,
 }
 
 export type HealthCheckStats = {

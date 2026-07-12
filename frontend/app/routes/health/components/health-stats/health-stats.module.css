@@ -52,47 +52,21 @@
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.windowRow {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 8px;
-}
-
-.windowChip {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    padding: 6px 10px;
-    background: none;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
+.clickableCard {
+    border: none;
     cursor: pointer;
-    transition: background 0.12s ease, border-color 0.12s ease;
-    min-width: 52px;
+    font: inherit;
+    color: inherit;
+    width: 100%;
 }
 
-.windowChip:hover {
+.clickableCard:hover {
     background-color: var(--bg-surface-2);
 }
 
-.activeChip {
+.activeCard {
     background-color: var(--bg-surface-2);
-    border-color: var(--accent);
-}
-
-.chipCount {
-    font-size: 1.5em;
-    font-weight: 700;
-    line-height: 1;
-}
-
-.chipWindow {
-    font-size: 0.7em;
-    color: var(--text-muted);
-    font-weight: 500;
+    box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .statNumber {

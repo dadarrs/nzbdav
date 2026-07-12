@@ -1,18 +1,11 @@
 import styles from "./health-stats.module.css";
-import type { HealthCheckStats, RepairWindowStat } from "~/clients/backend-client.server";
-
-export type RepairBrowseTarget = {
-    // RepairAction.Repaired or RepairAction.Deleted
-    action: number;
-    windowDays: number;
-}
+import type { HealthCheckStats } from "~/clients/backend-client.server";
 
 export type HealthStatsProps = {
     stats: HealthCheckStats[];
-    repairWindows: RepairWindowStat[];
-    // which repair-action browse section is open, if any
-    activeTarget: RepairBrowseTarget | null;
-    onTargetToggle: (target: RepairBrowseTarget) => void;
+    // which repair-action browse section is open (RepairAction value), if any
+    activeFilter: number | null;
+    onFilterToggle: (repairAction: number) => void;
 }
 
 enum HealthResult {
@@ -27,12 +20,18 @@ enum RepairAction {
     ActionNeeded = 3,
 }
 
-export function HealthStats({ stats, repairWindows, activeTarget, onTargetToggle }: HealthStatsProps) {
+export function HealthStats({ stats, activeFilter, onFilterToggle }: HealthStatsProps) {
     // Calculate totals from HealthCheckStats array
     const totalChecked = stats
         .reduce((sum, stat) => sum + stat.count, 0);
     const healthy = stats
         .filter(stat => stat.result === HealthResult.Healthy)
+        .reduce((sum, stat) => sum + stat.count, 0);
+    const repaired = stats
+        .filter(stat => stat.repairStatus === RepairAction.Repaired)
+        .reduce((sum, stat) => sum + stat.count, 0);
+    const deleted = stats
+        .filter(stat => stat.repairStatus === RepairAction.Deleted)
         .reduce((sum, stat) => sum + stat.count, 0);
 
     const getPercentage = (count: number) => {
@@ -44,7 +43,7 @@ export function HealthStats({ stats, repairWindows, activeTarget, onTargetToggle
             <div className={styles.header}>
                 <h3 className={styles.title}>Overview</h3>
                 <div className={styles.statusIndicator}>
-                    <span className={styles.statusLabel}>Last 30 Days</span>
+                    <span className={styles.statusLabel}>All Time</span>
                 </div>
             </div>
 
@@ -59,68 +58,26 @@ export function HealthStats({ stats, repairWindows, activeTarget, onTargetToggle
                     <div className={styles.statLabel}>Healthy ({getPercentage(healthy)}%)</div>
                 </div>
 
-                <WindowedStatCard
-                    label="Repaired"
-                    action={RepairAction.Repaired}
-                    color="var(--accent)"
-                    repairWindows={repairWindows}
-                    activeTarget={activeTarget}
-                    onTargetToggle={onTargetToggle}
-                />
+                <button
+                    type="button"
+                    className={`${styles.statCard} ${styles.clickableCard} ${activeFilter === RepairAction.Repaired ? styles.activeCard : ""}`}
+                    onClick={() => onFilterToggle(RepairAction.Repaired)}
+                    title="Show which files were repaired"
+                >
+                    <div className={styles.statNumber} style={{ color: 'var(--accent)' }}>{repaired}</div>
+                    <div className={styles.statLabel}>Repaired ({getPercentage(repaired)}%)</div>
+                </button>
 
-                <WindowedStatCard
-                    label="Deleted"
-                    action={RepairAction.Deleted}
-                    color="var(--danger)"
-                    repairWindows={repairWindows}
-                    activeTarget={activeTarget}
-                    onTargetToggle={onTargetToggle}
-                />
+                <button
+                    type="button"
+                    className={`${styles.statCard} ${styles.clickableCard} ${activeFilter === RepairAction.Deleted ? styles.activeCard : ""}`}
+                    onClick={() => onFilterToggle(RepairAction.Deleted)}
+                    title="Show which files were deleted"
+                >
+                    <div className={styles.statNumber} style={{ color: 'var(--danger)' }}>{deleted}</div>
+                    <div className={styles.statLabel}>Deleted ({getPercentage(deleted)}%)</div>
+                </button>
             </div>
         </div>
     );
-}
-
-type WindowedStatCardProps = {
-    label: string;
-    action: number;
-    color: string;
-    repairWindows: RepairWindowStat[];
-    activeTarget: RepairBrowseTarget | null;
-    onTargetToggle: (target: RepairBrowseTarget) => void;
-}
-
-function WindowedStatCard({ label, action, color, repairWindows, activeTarget, onTargetToggle }: WindowedStatCardProps) {
-    return (
-        <div className={styles.statCard}>
-            <div className={styles.windowRow}>
-                {repairWindows.map(window => {
-                    const count = action === RepairAction.Repaired ? window.repaired : window.deleted;
-                    const isActive = activeTarget?.action === action
-                        && activeTarget?.windowDays === window.windowDays;
-                    return (
-                        <button
-                            key={window.windowDays}
-                            type="button"
-                            className={`${styles.windowChip} ${isActive ? styles.activeChip : ""}`}
-                            onClick={() => onTargetToggle({ action, windowDays: window.windowDays })}
-                            title={`Show files ${label.toLowerCase()} in the last ${formatWindow(window.windowDays)}`}
-                        >
-                            <span className={styles.chipCount} style={{ color }}>{count}</span>
-                            <span className={styles.chipWindow}>{chipLabel(window.windowDays)}</span>
-                        </button>
-                    );
-                })}
-            </div>
-            <div className={styles.statLabel}>{label}</div>
-        </div>
-    );
-}
-
-function chipLabel(windowDays: number): string {
-    return windowDays >= 365 ? "1y" : `${windowDays}d`;
-}
-
-function formatWindow(windowDays: number): string {
-    return windowDays >= 365 ? "year" : `${windowDays} days`;
 }
