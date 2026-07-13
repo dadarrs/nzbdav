@@ -228,6 +228,8 @@ public class UsenetStreamingClient : WrappingNntpClient
     )
     {
         var connection = new BaseNntpClient();
+        if (connectionDetails.ResponseTimeoutSeconds is { } timeoutSeconds && timeoutSeconds > 0)
+            connection.CommandTimeout = TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 2, 120));
         var host = connectionDetails.Host;
         var port = connectionDetails.Port;
         var useSsl = connectionDetails.UseSsl;

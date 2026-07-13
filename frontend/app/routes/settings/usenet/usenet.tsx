@@ -1,6 +1,23 @@
 import styles from "./usenet.module.css"
-import { type Dispatch, type SetStateAction, useState, useCallback, useEffect, useMemo } from "react";
+import { type Dispatch, type ReactNode, type SetStateAction, useState, useCallback, useEffect, useMemo } from "react";
 import { Button } from "react-bootstrap";
+import {
+    closestCenter,
+    DndContext,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+    arrayMove,
+    rectSortingStrategy,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+} from "@dnd-kit/sortable";
+import { CSS as DndCss } from "@dnd-kit/utilities";
 import { receiveMessage } from "~/utils/websocket-util";
 import type { ProviderUsageItem } from "~/clients/backend-client.server";
 
@@ -29,6 +46,10 @@ type ConnectionDetails = {
     Pass: string;
     MaxConnections: number;
     StatPipeliningEnabled?: boolean;
+    // Per-step NNTP timeout in seconds (connect, TLS, each command/response).
+    // null/undefined = backend default (10s). Lower kills stalled requests
+    // sooner so failover moves to the next provider faster.
+    ResponseTimeoutSeconds?: number | null;
     // Optional user-set label. Shown in the UI in place of Host when present;
     // Host stays the real NNTP target.
     Nickname?: string;
@@ -121,6 +142,21 @@ function isValidDataCap(value: string): boolean {
     const gb = Number(trimmed);
     // 0 is allowed and means "no cap", same as leaving the field empty.
     return isFinite(gb) && gb >= 0;
+}
+
+// Empty = backend default (10s). The backend clamps to the same 2-120 range.
+function isValidResponseTimeout(value: string): boolean {
+    const trimmed = value.trim();
+    if (trimmed === "") return true;
+    const seconds = Number(trimmed);
+    return Number.isInteger(seconds) && seconds >= 2 && seconds <= 120;
+}
+
+function responseTimeoutToValue(value: string): number | null {
+    const trimmed = value.trim();
+    if (trimmed === "") return null;
+    const seconds = Number(trimmed);
+    return Number.isInteger(seconds) && seconds > 0 ? seconds : null;
 }
 
 function formatBytes(bytes: number): string {
@@ -243,6 +279,36 @@ export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSet
         handleCloseModal();
     }, [config, providerConfig, editingIndex, setNewConfig, handleCloseModal]);
 
+    // Drag-and-drop priority: list order within a section is the order providers
+    // are preferred by the backend. A drag permutes the section's items among the
+    // array slots that section already occupies, so providers in other sections
+    // keep their positions. Sortable ids are global array indices as strings.
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
+
+    const handleSectionDragEnd = useCallback((event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const from = Number(active.id);
+        const to = Number(over.id);
+        const section = providerSections.find(s => s.items.some(item => item.index === from));
+        if (!section || !section.items.some(item => item.index === to)) return;
+
+        const slots = section.items.map(item => item.index);
+        const reordered = arrayMove(
+            section.items.map(item => item.provider),
+            slots.indexOf(from),
+            slots.indexOf(to));
+        const newProviders = [...providerConfig.Providers];
+        slots.forEach((slot, i) => { newProviders[slot] = reordered[i]; });
+        setNewConfig({
+            ...config,
+            "usenet.providers": serializeProviderConfig({ ...providerConfig, Providers: newProviders }),
+        });
+    }, [config, providerConfig, providerSections, setNewConfig]);
+
     const handleConnectionsMessage = useCallback((message: string) => {
         const parts = (message || "0|0|0|0|1|0").split("|");
         const [index, live, idle, _0, _1, _2] = parts.map((x: any) => Number(x));
@@ -316,25 +382,48 @@ export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSet
                         Click on the "Add" button to get started.
                     </p>
                 ) : (
-                    providerSections.map((section) => (
-                        <div key={section.key} className={styles["provider-section"]}>
-                            <div className={styles["provider-section-title"]}>{section.title}</div>
-                            <div className={styles["providers-grid"]}>
-                                {section.items.map(({ provider, index }) => (
-                                    <ProviderCard
-                                        key={index}
-                                        provider={provider}
-                                        effectiveName={effectiveNames[index] ?? provider.Host}
-                                        counts={connections[index]}
-                                        usage={usage[index]}
-                                        onEdit={() => handleEditProvider(index)}
-                                        onDelete={() => handleDeleteProvider(index)}
-                                        onResetUsage={() => handleResetUsage(index)}
-                                    />
-                                ))}
+                    providerSections.map((section) => {
+                        const sortable = section.items.length > 1 && section.key !== "disabled";
+                        return (
+                            <div key={section.key} className={styles["provider-section"]}>
+                                <div className={styles["provider-section-title"]}>
+                                    {section.title}
+                                    {sortable && (
+                                        <span className={styles["reorder-hint"]}>
+                                            drag to reorder · listed first = used first
+                                        </span>
+                                    )}
+                                </div>
+                                <DndContext
+                                    sensors={sensors}
+                                    collisionDetection={closestCenter}
+                                    onDragEnd={handleSectionDragEnd}
+                                >
+                                    <SortableContext
+                                        items={section.items.map(item => String(item.index))}
+                                        strategy={rectSortingStrategy}
+                                    >
+                                        <div className={styles["providers-grid"]}>
+                                            {section.items.map(({ provider, index }) => (
+                                                <SortableProviderCard
+                                                    key={index}
+                                                    sortableId={String(index)}
+                                                    sortable={sortable}
+                                                    provider={provider}
+                                                    effectiveName={effectiveNames[index] ?? provider.Host}
+                                                    counts={connections[index]}
+                                                    usage={usage[index]}
+                                                    onEdit={() => handleEditProvider(index)}
+                                                    onDelete={() => handleDeleteProvider(index)}
+                                                    onResetUsage={() => handleResetUsage(index)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </SortableContext>
+                                </DndContext>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
 
@@ -360,12 +449,60 @@ type ProviderCardProps = {
     onEdit: () => void;
     onDelete: () => void;
     onResetUsage: () => void;
+    // Grip button injected by SortableProviderCard; rendered before edit/delete.
+    dragHandle?: ReactNode;
 };
+
+// Sortable shell around ProviderCard: owns the dnd-kit transform/ref and hands
+// the card a grip-handle button so only the handle starts a drag (the card's
+// own buttons stay clickable).
+function SortableProviderCard({ sortableId, sortable, ...cardProps }: ProviderCardProps & {
+    sortableId: string;
+    sortable: boolean;
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+        useSortable({ id: sortableId, disabled: !sortable });
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{
+                transform: DndCss.Transform.toString(transform),
+                transition,
+                opacity: isDragging ? 0.6 : undefined,
+                zIndex: isDragging ? 1 : undefined,
+            }}
+        >
+            <ProviderCard
+                {...cardProps}
+                dragHandle={sortable ? (
+                    <button
+                        type="button"
+                        className={styles["drag-handle"]}
+                        aria-label="Drag to reorder"
+                        title="Drag to reorder — listed first is used first"
+                        {...attributes}
+                        {...listeners}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <circle cx="5" cy="3" r="1.4" />
+                            <circle cx="11" cy="3" r="1.4" />
+                            <circle cx="5" cy="8" r="1.4" />
+                            <circle cx="11" cy="8" r="1.4" />
+                            <circle cx="5" cy="13" r="1.4" />
+                            <circle cx="11" cy="13" r="1.4" />
+                        </svg>
+                    </button>
+                ) : undefined}
+            />
+        </div>
+    );
+}
 
 // One provider card. Everything index-keyed (usage, connection counts,
 // handlers) is pre-resolved by the caller against the provider's global index,
 // so the card itself never sees a filtered position.
-function ProviderCard({ provider, effectiveName, counts, usage, onEdit, onDelete, onResetUsage }: ProviderCardProps) {
+function ProviderCard({ provider, effectiveName, counts, usage, onEdit, onDelete, onResetUsage, dragHandle }: ProviderCardProps) {
     return (
         <div className={styles["provider-card"]}>
             <div className={styles["provider-card-inner"]}>
@@ -384,6 +521,7 @@ function ProviderCard({ provider, effectiveName, counts, usage, onEdit, onDelete
                         </div>
                     </div>
                     <div className={styles["provider-header-actions"]}>
+                        {dragHandle}
                         <button
                             className={styles["header-action-button"]}
                             onClick={onEdit}
@@ -575,6 +713,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, otherEffective
     const [pass, setPass] = useState(provider?.Pass || "");
     const [showPass, setShowPass] = useState(false);
     const [maxConnections, setMaxConnections] = useState(provider?.MaxConnections?.toString() || "");
+    const [responseTimeout, setResponseTimeout] = useState(provider?.ResponseTimeoutSeconds?.toString() || "");
     const [type, setType] = useState<ProviderType>(provider?.Type ?? ProviderType.Pooled);
     const [statPipeliningEnabled, setStatPipeliningEnabled] = useState(provider?.StatPipeliningEnabled ?? false);
     const [isTestingConnection, setIsTestingConnection] = useState(false);
@@ -617,6 +756,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, otherEffective
             setPass(provider?.Pass || "");
             setShowPass(false);
             setMaxConnections(provider?.MaxConnections?.toString() || "");
+            setResponseTimeout(provider?.ResponseTimeoutSeconds?.toString() || "");
             setType(provider?.Type ?? ProviderType.Pooled);
             setStatPipeliningEnabled(provider?.StatPipeliningEnabled ?? false);
             setConnectionTested(false);
@@ -727,6 +867,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, otherEffective
             Pass: pass,
             MaxConnections: parseInt(maxConnections, 10),
             StatPipeliningEnabled: statPipeliningEnabled,
+            ResponseTimeoutSeconds: responseTimeoutToValue(responseTimeout),
             Nickname: trimmedNickname === "" ? undefined : trimmedNickname,
             ByteLimit: gbStringToBytes(dataCapGb),
             // Preserve the usage-counter bookkeeping across edits so saving a
@@ -735,7 +876,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, otherEffective
             BytesUsedOffset: provider?.BytesUsedOffset ?? 0,
             BytesUsedResetAt: provider?.BytesUsedResetAt ?? 0,
         });
-    }, [type, host, port, useSsl, user, pass, maxConnections, statPipeliningEnabled, nickname, defaultNickname, dataCapGb, provider, onSave]);
+    }, [type, host, port, useSsl, user, pass, maxConnections, statPipeliningEnabled, responseTimeout, nickname, defaultNickname, dataCapGb, provider, onSave]);
 
     const handleOverlayClick = useCallback((e: React.MouseEvent) => {
         if (e.target === e.currentTarget) {
@@ -749,6 +890,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, otherEffective
         && pass.trim() !== ""
         && isPositiveInteger(maxConnections)
         && isValidDataCap(dataCapGb)
+        && isValidResponseTimeout(responseTimeout)
         && !nicknameTaken;
 
     const canSave = isFormValid && (connectionTested || type == ProviderType.Disabled);
@@ -915,6 +1057,25 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, otherEffective
                                 value={maxConnections}
                                 onChange={(e) => setMaxConnections(e.target.value)}
                             />
+                        </div>
+
+                        <div className={styles["form-group"]}>
+                            <label htmlFor="provider-response-timeout" className={styles["form-label"]}>
+                                Response timeout (seconds, optional)
+                            </label>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                id="provider-response-timeout"
+                                className={`${styles["form-input"]} ${!isValidResponseTimeout(responseTimeout) ? styles.error : ""}`}
+                                placeholder="Default: 10"
+                                value={responseTimeout}
+                                onChange={(e) => setResponseTimeout(e.target.value)}
+                            />
+                            <div className={styles["form-hint"]}>
+                                Deadline per connect/command step (2-120). Lower values kill
+                                stalled requests sooner and fail over to the next provider faster.
+                            </div>
                         </div>
 
                         <div className={styles["form-group"]}>

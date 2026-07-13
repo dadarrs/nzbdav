@@ -66,6 +66,11 @@ public class UsenetProviderConfig
         // still the real NNTP target and the stable key used for metrics/logs.
         public string? Nickname { get; set; }
 
+        // Per-step NNTP timeout in seconds (connect, TLS handshake, each command
+        // write / response read). null = library default (10 s). Lower values kill
+        // stalled requests sooner so failover moves to the next provider faster.
+        public int? ResponseTimeoutSeconds { get; set; }
+
         // null or 0 = no cap. Used by block-account holders to stop a paid block
         // from being drained beyond its purchased size.
         public long? ByteLimit { get; set; }

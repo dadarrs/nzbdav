@@ -42,6 +42,40 @@
     margin-bottom: 12px;
 }
 
+.reorder-hint {
+    margin-left: 10px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--text-faint);
+}
+
+.drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--bg-base);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: grab;
+    touch-action: none;
+    padding: 0;
+    transition: all 0.2s ease;
+}
+
+.drag-handle:hover {
+    background: var(--bg-elevated);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
 .providers-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
