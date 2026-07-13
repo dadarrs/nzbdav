@@ -363,11 +363,15 @@ public class MultiProviderNntpClient(
 
     private List<MultiConnectionNntpClient> GetOrderedProviders()
     {
+        // Within a type tier: prefer the earliest-configured provider that has a free
+        // connection right now, spilling to later ones only when it's saturated (OrderBy
+        // is stable, so ties keep config-list order -- the user's drag-and-drop priority).
+        // If everything is saturated, requests queue on the earliest-configured provider.
         var enabled = providers
             .Where(x => x.ProviderType != ProviderType.Disabled)
             .Where(x => !IsOverLimit(x))
             .OrderBy(x => x.ProviderType)
-            .ThenByDescending(x => x.AvailableConnections)
+            .ThenByDescending(x => x.AvailableConnections > 0)
             .ToList();
 
         var healthy = enabled.Where(x => !x.IsTripped).ToList();
@@ -395,9 +399,9 @@ public class MultiProviderNntpClient(
     /// When the "use backup providers for health checks" setting is on, every pooled provider
     /// plus every "Backup &amp; Health Checks"-type provider is first-class here -- the type is
     /// the sole gate; the pipelining tickbox only selects pipelined vs linear STATs. Eligible
-    /// providers are ordered by free capacity so concurrent batches spread across all of them.
-    /// Backup use may be scoped to on-add checks only: background checks are recognized by the
-    /// marker context on their cancellation token.
+    /// providers are ordered free-slot-first then by configured priority, so concurrent batches
+    /// spill across them. Backup use may be scoped to on-add checks only: background checks are
+    /// recognized by the marker context on their cancellation token.
     /// Non-eligible providers still follow, but only ever see the still-missing re-query.
     /// </summary>
     private List<MultiConnectionNntpClient> GetOrderedProvidersForStatCheck(CancellationToken ct)
@@ -409,7 +413,8 @@ public class MultiProviderNntpClient(
             .OrderByDescending(x => x.ProviderType == ProviderType.Pooled
                                     || (useBackupProviders
                                         && x.ProviderType == ProviderType.BackupAndStats))
-            .ThenByDescending(x => x.AvailableConnections)
+            // free-slot first, then stable config-list order (drag-and-drop priority)
+            .ThenByDescending(x => x.AvailableConnections > 0)
             .ToList();
 
         var healthy = enabled.Where(x => !x.IsTripped).ToList();

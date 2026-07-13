@@ -72,6 +72,8 @@ declare const styles: {
   readonly "usage-warning": string;
   readonly "provider-section": string;
   readonly "provider-section-title": string;
+  readonly "reorder-hint": string;
+  readonly "drag-handle": string;
   readonly "form-hint-error": string;
   readonly "password-input-wrapper": string;
   readonly "password-toggle": string;

@@ -1,6 +1,23 @@
 import styles from "./usenet.module.css"
-import { type Dispatch, type SetStateAction, useState, useCallback, useEffect, useMemo } from "react";
+import { type Dispatch, type ReactNode, type SetStateAction, useState, useCallback, useEffect, useMemo } from "react";
 import { Button } from "react-bootstrap";
+import {
+    closestCenter,
+    DndContext,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+    arrayMove,
+    rectSortingStrategy,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+} from "@dnd-kit/sortable";
+import { CSS as DndCss } from "@dnd-kit/utilities";
 import { receiveMessage } from "~/utils/websocket-util";
 import type { ProviderUsageItem } from "~/clients/backend-client.server";
 
@@ -243,6 +260,36 @@ export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSet
         handleCloseModal();
     }, [config, providerConfig, editingIndex, setNewConfig, handleCloseModal]);
 
+    // Drag-and-drop priority: list order within a section is the order providers
+    // are preferred by the backend. A drag permutes the section's items among the
+    // array slots that section already occupies, so providers in other sections
+    // keep their positions. Sortable ids are global array indices as strings.
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
+
+    const handleSectionDragEnd = useCallback((event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+        const from = Number(active.id);
+        const to = Number(over.id);
+        const section = providerSections.find(s => s.items.some(item => item.index === from));
+        if (!section || !section.items.some(item => item.index === to)) return;
+
+        const slots = section.items.map(item => item.index);
+        const reordered = arrayMove(
+            section.items.map(item => item.provider),
+            slots.indexOf(from),
+            slots.indexOf(to));
+        const newProviders = [...providerConfig.Providers];
+        slots.forEach((slot, i) => { newProviders[slot] = reordered[i]; });
+        setNewConfig({
+            ...config,
+            "usenet.providers": serializeProviderConfig({ ...providerConfig, Providers: newProviders }),
+        });
+    }, [config, providerConfig, providerSections, setNewConfig]);
+
     const handleConnectionsMessage = useCallback((message: string) => {
         const parts = (message || "0|0|0|0|1|0").split("|");
         const [index, live, idle, _0, _1, _2] = parts.map((x: any) => Number(x));
@@ -316,25 +363,48 @@ export function UsenetSettings({ config, setNewConfig, initialUsage }: UsenetSet
                         Click on the "Add" button to get started.
                     </p>
                 ) : (
-                    providerSections.map((section) => (
-                        <div key={section.key} className={styles["provider-section"]}>
-                            <div className={styles["provider-section-title"]}>{section.title}</div>
-                            <div className={styles["providers-grid"]}>
-                                {section.items.map(({ provider, index }) => (
-                                    <ProviderCard
-                                        key={index}
-                                        provider={provider}
-                                        effectiveName={effectiveNames[index] ?? provider.Host}
-                                        counts={connections[index]}
-                                        usage={usage[index]}
-                                        onEdit={() => handleEditProvider(index)}
-                                        onDelete={() => handleDeleteProvider(index)}
-                                        onResetUsage={() => handleResetUsage(index)}
-                                    />
-                                ))}
+                    providerSections.map((section) => {
+                        const sortable = section.items.length > 1 && section.key !== "disabled";
+                        return (
+                            <div key={section.key} className={styles["provider-section"]}>
+                                <div className={styles["provider-section-title"]}>
+                                    {section.title}
+                                    {sortable && (
+                                        <span className={styles["reorder-hint"]}>
+                                            drag to reorder · listed first = used first
+                                        </span>
+                                    )}
+                                </div>
+                                <DndContext
+                                    sensors={sensors}
+                                    collisionDetection={closestCenter}
+                                    onDragEnd={handleSectionDragEnd}
+                                >
+                                    <SortableContext
+                                        items={section.items.map(item => String(item.index))}
+                                        strategy={rectSortingStrategy}
+                                    >
+                                        <div className={styles["providers-grid"]}>
+                                            {section.items.map(({ provider, index }) => (
+                                                <SortableProviderCard
+                                                    key={index}
+                                                    sortableId={String(index)}
+                                                    sortable={sortable}
+                                                    provider={provider}
+                                                    effectiveName={effectiveNames[index] ?? provider.Host}
+                                                    counts={connections[index]}
+                                                    usage={usage[index]}
+                                                    onEdit={() => handleEditProvider(index)}
+                                                    onDelete={() => handleDeleteProvider(index)}
+                                                    onResetUsage={() => handleResetUsage(index)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </SortableContext>
+                                </DndContext>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
 
@@ -360,12 +430,60 @@ type ProviderCardProps = {
     onEdit: () => void;
     onDelete: () => void;
     onResetUsage: () => void;
+    // Grip button injected by SortableProviderCard; rendered before edit/delete.
+    dragHandle?: ReactNode;
 };
+
+// Sortable shell around ProviderCard: owns the dnd-kit transform/ref and hands
+// the card a grip-handle button so only the handle starts a drag (the card's
+// own buttons stay clickable).
+function SortableProviderCard({ sortableId, sortable, ...cardProps }: ProviderCardProps & {
+    sortableId: string;
+    sortable: boolean;
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+        useSortable({ id: sortableId, disabled: !sortable });
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{
+                transform: DndCss.Transform.toString(transform),
+                transition,
+                opacity: isDragging ? 0.6 : undefined,
+                zIndex: isDragging ? 1 : undefined,
+            }}
+        >
+            <ProviderCard
+                {...cardProps}
+                dragHandle={sortable ? (
+                    <button
+                        type="button"
+                        className={styles["drag-handle"]}
+                        aria-label="Drag to reorder"
+                        title="Drag to reorder — listed first is used first"
+                        {...attributes}
+                        {...listeners}
+                    >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <circle cx="5" cy="3" r="1.4" />
+                            <circle cx="11" cy="3" r="1.4" />
+                            <circle cx="5" cy="8" r="1.4" />
+                            <circle cx="11" cy="8" r="1.4" />
+                            <circle cx="5" cy="13" r="1.4" />
+                            <circle cx="11" cy="13" r="1.4" />
+                        </svg>
+                    </button>
+                ) : undefined}
+            />
+        </div>
+    );
+}
 
 // One provider card. Everything index-keyed (usage, connection counts,
 // handlers) is pre-resolved by the caller against the provider's global index,
 // so the card itself never sees a filtered position.
-function ProviderCard({ provider, effectiveName, counts, usage, onEdit, onDelete, onResetUsage }: ProviderCardProps) {
+function ProviderCard({ provider, effectiveName, counts, usage, onEdit, onDelete, onResetUsage, dragHandle }: ProviderCardProps) {
     return (
         <div className={styles["provider-card"]}>
             <div className={styles["provider-card-inner"]}>
@@ -384,6 +502,7 @@ function ProviderCard({ provider, effectiveName, counts, usage, onEdit, onDelete
                         </div>
                     </div>
                     <div className={styles["provider-header-actions"]}>
+                        {dragHandle}
                         <button
                             className={styles["header-action-button"]}
                             onClick={onEdit}
