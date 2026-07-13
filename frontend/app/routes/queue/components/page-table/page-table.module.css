@@ -95,14 +95,14 @@
     .uploading + :not(.uploading) {
         border-top: 3px solid var(--bg-surface);
     }
+}
 
-    .clickable {
-        cursor: pointer;
-    }
+.clickable {
+    cursor: pointer;
+}
 
-    .clickable:hover td {
-        background: color-mix(in srgb, var(--accent) 4%, transparent);
-    }
+.clickable:hover td {
+    background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 
 .tableContainer:not(:has(.footer)) .table tbody tr:last-child td {

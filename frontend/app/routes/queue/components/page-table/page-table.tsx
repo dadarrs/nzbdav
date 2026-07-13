@@ -67,7 +67,9 @@ export function PageRow(props: PageRowProps) {
 
     return (
         <tr className={classNames(rowStyles)} onClick={props.onRowClick}>
-            <td onClick={e => e.stopPropagation()}>
+            {/* the checkbox control stops its own propagation (TriCheckbox);
+                clicks on the name area bubble up and toggle the row */}
+            <td>
                 <TriCheckbox state={props.isSelected} onChange={props.onRowSelectionChanged}>
                     <Truncate>{props.name}</Truncate>
                     <div className={styles.mobile}>

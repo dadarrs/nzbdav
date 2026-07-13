@@ -19,7 +19,9 @@ export function TriCheckbox({ state, onChange, children }: TriCheckboxProps) {
 
     return (
         <div className={styles.container}>
-            <div className={styles.checkbox}>
+            {/* keep checkbox clicks from bubbling to click-to-expand rows;
+                the label/content area next to it is free to bubble */}
+            <div className={styles.checkbox} onClick={e => e.stopPropagation()}>
                 <Form.Check
                     ref={checkboxRef}
                     checked={state === "all" || state === true}
