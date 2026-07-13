@@ -49,14 +49,16 @@ export function ImportStatsRow({ nzoId, colSpan }: ImportStatsRowProps) {
     return (
         <tr className={styles.detailsTr}>
             <td colSpan={colSpan} className={styles.detailsTd}>
-                {data === "loading" && <div className={styles.muted}>Loading import stats…</div>}
-                {data === "error" && <div className={styles.muted}>Could not load import stats.</div>}
-                {data !== "loading" && data !== "error" && !data.found && (
-                    <div className={styles.muted}>
-                        No stats recorded for this import — it completed before import stats existed.
-                    </div>
-                )}
-                {data !== "loading" && data !== "error" && data.found && <StatsContent data={data} />}
+                <div className={styles.panel}>
+                    {data === "loading" && <div className={styles.muted}>Loading import stats…</div>}
+                    {data === "error" && <div className={styles.muted}>Could not load import stats.</div>}
+                    {data !== "loading" && data !== "error" && !data.found && (
+                        <div className={styles.muted}>
+                            No stats recorded for this import — it completed before import stats existed.
+                        </div>
+                    )}
+                    {data !== "loading" && data !== "error" && data.found && <StatsContent data={data} />}
+                </div>
             </td>
         </tr>
     );
@@ -65,28 +67,28 @@ export function ImportStatsRow({ nzoId, colSpan }: ImportStatsRowProps) {
 function StatsContent({ data }: { data: ImportStatsResponse }) {
     const showVerify = data.verifyMs !== null || data.providers.some(p => p.verifyBytes > 0);
     return (
-        <div className={styles.content}>
+        <>
             <div className={styles.title}>
                 Import stats
                 <span className={styles.titleNote}>
-                    covers the import process only — streaming and background health checks are not included
+                    · import process only — streaming and background health checks not included
                 </span>
             </div>
             <div className={styles.phases}>
-                <span className={styles.phase}>
-                    <span className={`${styles.dot} ${styles.dotDownload}`} />
+                <span className={`${styles.pill} ${styles.pillDownload}`}>
+                    <span className={styles.dot} />
                     Download {formatDuration(data.downloadMs)}
                 </span>
                 {data.verifyMs !== null && (
-                    <span className={styles.phase}>
-                        <span className={`${styles.dot} ${styles.dotVerify}`} />
+                    <span className={`${styles.pill} ${styles.pillVerify}`}>
+                        <span className={styles.dot} />
                         Verify {formatDuration(data.verifyMs)}
                     </span>
                 )}
-                <span className={styles.phase}>
+                <span className={`${styles.pill} ${styles.pillTotal}`}>
                     Total {formatDuration(data.totalMs)}
                 </span>
-                {data.failed && <span className={styles.failed}>failed</span>}
+                {data.failed && <span className={`${styles.pill} ${styles.pillFailed}`}>failed</span>}
             </div>
 
             {data.providers.length > 0 && (
@@ -111,7 +113,7 @@ function StatsContent({ data }: { data: ImportStatsResponse }) {
                     </tbody>
                 </table>
             )}
-        </div>
+        </>
     );
 }
 

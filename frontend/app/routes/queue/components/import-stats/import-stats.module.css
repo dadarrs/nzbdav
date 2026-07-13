@@ -3,32 +3,37 @@
 }
 
 .detailsTd {
-    padding: 4px 12px 14px 28px !important;
-    background: color-mix(in srgb, var(--bg-surface) 55%, transparent);
+    /* the inset panel below provides the visual containment */
+    padding: 0 8px 12px 8px !important;
+    background: transparent;
+}
+
+/* inset panel (design.md §5): contained well, not text floating in the cell */
+.panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .muted {
-    color: var(--text-muted);
+    color: var(--text-faint);
     font-size: 12px;
-    padding: 6px 0;
 }
 
-.content {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding-top: 6px;
-}
-
+/* section micro-label + faint hint */
 .title {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 10px;
-    font-size: 10.5px;
+    gap: 8px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.6px;
     color: var(--text-muted);
 }
 
@@ -44,46 +49,58 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 18px;
-    font-size: 12.5px;
-    color: var(--text-secondary);
+    gap: 8px;
 }
 
-.phase {
+/* pill badges (design.md §5): tinted background, semantic text color */
+.pill {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    white-space: nowrap;
-}
-
-.dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-.dotDownload {
-    background: var(--bs-primary, #0d6efd);
-}
-
-.dotVerify {
-    background: var(--success, #28a745);
-}
-
-.failed {
-    color: var(--danger);
     font-size: 11px;
     font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.pillDownload {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.pillVerify {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.pillTotal {
+    color: var(--text-secondary);
+    background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+}
+
+.pillFailed {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 
+.dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: currentColor;
+}
+
 .providerTable {
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 12.5px;
     width: auto;
     max-width: 560px;
+    font-variant-numeric: tabular-nums;
 }
 
 .providerTable th {
@@ -92,14 +109,14 @@
     font-weight: 600;
     font-size: 10.5px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 3px 16px;
+    letter-spacing: 0.5px;
+    padding: 3px 20px 5px;
     border-bottom: 1px solid var(--border-subtle);
 }
 
 .providerTable td {
     text-align: center;
-    padding: 4px 16px !important;
+    padding: 5px 20px !important;
     border: none !important;
     color: var(--text-secondary);
 }
@@ -112,4 +129,5 @@
 
 .providerTable td:first-child {
     color: var(--text-primary);
+    font-weight: 500;
 }
