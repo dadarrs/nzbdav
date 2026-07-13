@@ -987,7 +987,7 @@ function ProviderModal({ show, provider, pipeliningMasterEnabled, otherEffective
                             </div>
                             <div style={{ marginTop: '8px', opacity: 0.7, fontSize: '0.85em' }}>
                                 {pipeliningMasterEnabled
-                                    ? "Pipelining sends many STAT checks at once for faster health checks. For backup providers, this tickbox also opts the provider into carrying health checks when “Use Backup Providers for health checks” is enabled on the SABnzbd tab (providers of type “Backup & Health Checks” carry them even without pipelining, one STAT at a time) — STAT commands download no article data, though their protocol traffic can count toward block quotas (~0.7 MB per 10 GB of content checked). Test that this provider handles it correctly before enabling."
+                                    ? "Pipelining sends many STAT checks at once for faster health checks. It only affects how this provider runs checks it already carries — whether a backup provider carries health checks at all is decided by its Type (“Backup & Health Checks”) together with the “Use Backup Providers for health checks” switch on the SABnzbd tab. Test that this provider handles pipelining correctly before enabling."
                                     : "To tick “Enable STAT pipelining for this provider”, first turn on the NNTP pipelining master switch on the SABnzbd tab. It’s disabled globally right now."}
                             </div>
                         </div>
