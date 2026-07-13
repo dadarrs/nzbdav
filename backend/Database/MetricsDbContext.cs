@@ -51,7 +51,12 @@ public sealed class MetricsDbContext() : DbContext(Options.Value)
             e.Property(x => x.DurationMs).IsRequired();
             e.Property(x => x.Retries).IsRequired();
 
-            e.HasIndex(x => x.At);
+            // Covering index: the overview page's error-donut and latency-histogram
+            // aggregates scan the whole 24h window; covering (At, Status, DurationMs)
+            // keeps those scans index-only instead of a rowid lookup per row (which
+            // took seconds at millions of fetches/day). Also serves every plain
+            // At-range query (rollups, retention) via its prefix.
+            e.HasIndex(x => new { x.At, x.Status, x.DurationMs });
             e.HasIndex(x => new { x.Provider, x.At });
         });
 
