@@ -397,10 +397,11 @@ public class MultiProviderNntpClient(
     /// bytes, so backup/block accounts can absorb existence checks nearly for free (protocol
     /// traffic may still be metered).
     /// When the "use backup providers for health checks" setting is on, every pooled provider
-    /// plus any backup provider that opted in ("Backup &amp; Health Checks" type, or STAT
-    /// pipelining enabled) is first-class here, ordered free-slot-first then by configured
-    /// priority, so concurrent batches spill across them. Backup use may be scoped to on-add checks only:
-    /// background checks are recognized by the marker context on their cancellation token.
+    /// plus every "Backup &amp; Health Checks"-type provider is first-class here -- the type is
+    /// the sole gate; the pipelining tickbox only selects pipelined vs linear STATs. Eligible
+    /// providers are ordered free-slot-first then by configured priority, so concurrent batches
+    /// spill across them. Backup use may be scoped to on-add checks only: background checks are
+    /// recognized by the marker context on their cancellation token.
     /// Non-eligible providers still follow, but only ever see the still-missing re-query.
     /// </summary>
     private List<MultiConnectionNntpClient> GetOrderedProvidersForStatCheck(CancellationToken ct)
@@ -411,8 +412,7 @@ public class MultiProviderNntpClient(
             .Where(x => x.ProviderType != ProviderType.Disabled)
             .OrderByDescending(x => x.ProviderType == ProviderType.Pooled
                                     || (useBackupProviders
-                                        && (x.StatPipeliningEnabled
-                                            || x.ProviderType == ProviderType.BackupAndStats)))
+                                        && x.ProviderType == ProviderType.BackupAndStats))
             // free-slot first, then stable config-list order (drag-and-drop priority)
             .ThenByDescending(x => x.AvailableConnections > 0)
             .ToList();

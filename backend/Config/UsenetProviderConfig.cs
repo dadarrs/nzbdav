@@ -13,9 +13,9 @@ public class UsenetProviderConfig
 
     /// <summary>
     /// Connections eligible to carry STAT health-check traffic: every pooled provider, plus --
-    /// when the "use backup providers for health checks" setting is on -- any enabled backup
-    /// provider that has STAT pipelining enabled. STAT existence checks transfer no article
-    /// bytes, so they cost block accounts almost nothing (only protocol traffic).
+    /// when the "use backup providers for health checks" setting is on -- providers of type
+    /// "Backup &amp; Health Checks". STAT existence checks transfer no article bytes, so they
+    /// cost block accounts almost nothing (only protocol traffic).
     /// </summary>
     public int TotalStatCheckConnections(bool useBackupProviders) => Math.Max(1, Providers
         .Where(x => x.IsStatCheckEligible(useBackupProviders))
@@ -87,11 +87,10 @@ public class UsenetProviderConfig
 
         // Pooled providers always serve health checks. Backup providers join the STAT fan-out
         // only when the global "use backup providers for health checks" setting is on AND the
-        // provider opted in: either its type is "Backup & Health Checks" (linear STATs, no
-        // pipelining required) or its pipelining tickbox is enabled. Either opt-in is
-        // per-provider, so a provider whose STAT support is broken can be left out.
+        // provider's type is "Backup & Health Checks" -- the type is the sole gate, so plain
+        // "Backup Only" means backup only. The pipelining tickbox merely selects pipelined vs
+        // one-at-a-time STATs for providers that are already eligible by type.
         public bool IsStatCheckEligible(bool useBackupProviders) => Type == ProviderType.Pooled
-            || (useBackupProviders && Type != ProviderType.Disabled
-                                   && (StatPipeliningEnabled || Type == ProviderType.BackupAndStats));
+            || (useBackupProviders && Type == ProviderType.BackupAndStats);
     }
 }

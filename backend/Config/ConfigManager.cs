@@ -172,10 +172,11 @@ public class ConfigManager
     }
 
     /// <summary>
-    /// When enabled, backup providers that have STAT pipelining enabled also carry article
-    /// health-check traffic alongside the pooled providers. STAT checks transfer no article
-    /// bytes; on byte-metered blocks the protocol traffic still counts, at roughly 0.7MB of
-    /// quota per 10GB of content checked (measured ~45 bytes per STAT).
+    /// When enabled, providers of type "Backup &amp; Health Checks" carry article health-check
+    /// traffic alongside the pooled providers (type is the sole gate; plain "Backup Only"
+    /// providers never do). STAT checks transfer no article bytes; on byte-metered blocks the
+    /// protocol traffic still counts, at roughly 0.7MB of quota per 10GB of content checked
+    /// (measured ~45 bytes per STAT).
     /// </summary>
     public bool UseBackupProvidersForHealthChecks()
     {
