@@ -66,6 +66,12 @@ function StatsContent({ data }: { data: ImportStatsResponse }) {
     const showVerify = data.verifyMs !== null || data.providers.some(p => p.verifyBytes > 0);
     return (
         <div className={styles.content}>
+            <div className={styles.title}>
+                Import stats
+                <span className={styles.titleNote}>
+                    covers the import process only — streaming and background health checks are not included
+                </span>
+            </div>
             <div className={styles.phases}>
                 <span className={styles.phase}>
                     <span className={`${styles.dot} ${styles.dotDownload}`} />
