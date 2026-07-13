@@ -53,17 +53,21 @@ export type PageRowProps = {
     error?: string,
     fileSizeBytes: number,
     actions: ReactNode,
-    onRowSelectionChanged: (isSelected: boolean) => void
+    onRowSelectionChanged: (isSelected: boolean) => void,
+    // when set, clicking the row (outside the checkbox/name and actions cells)
+    // fires this -- used by history rows to toggle their import-stats details
+    onRowClick?: () => void,
 }
 export function PageRow(props: PageRowProps) {
     const rowStyles = [
         props.isRemoving && styles.removing,
-        props.isUploading && styles.uploading
+        props.isUploading && styles.uploading,
+        props.onRowClick && styles.clickable,
     ];
 
     return (
-        <tr className={classNames(rowStyles)}>
-            <td>
+        <tr className={classNames(rowStyles)} onClick={props.onRowClick}>
+            <td onClick={e => e.stopPropagation()}>
                 <TriCheckbox state={props.isSelected} onChange={props.onRowSelectionChanged}>
                     <Truncate>{props.name}</Truncate>
                     <div className={styles.mobile}>
@@ -84,7 +88,7 @@ export function PageRow(props: PageRowProps) {
             <td className={styles.desktop}>
                 {formatFileSize(props.fileSizeBytes)}
             </td>
-            <td>
+            <td onClick={e => e.stopPropagation()}>
                 <div className={styles.actions}>
                     {props.actions}
                 </div>

@@ -6,6 +6,7 @@ import { type TriCheckboxState } from "../tri-checkbox/tri-checkbox"
 import type { PresentationHistorySlot } from "../../route"
 import { getLeafDirectoryName } from "~/utils/path"
 import { PageRow, PageTable } from "../page-table/page-table"
+import { ImportStatsRow } from "../import-stats/import-stats"
 import styles from "../../route.module.css"
 import { PageSection } from "../page-section/page-section"
 import { Pagination } from "../pagination/pagination"
@@ -179,6 +180,7 @@ type HistoryRowProps = {
 export function HistoryRow({ slot, onIsSelectedChanged, onIsRemovingChanged, onRemoved }: HistoryRowProps) {
     // state
     const [isConfirmingRemoval, setIsConfirmingRemoval] = useState(false);
+    const [showStats, setShowStats] = useState(false);
 
     // events
     const onRemove = useCallback(() => {
@@ -221,7 +223,9 @@ export function HistoryRow({ slot, onIsSelectedChanged, onIsRemovingChanged, onR
                 fileSizeBytes={slot.bytes}
                 actions={<Actions slot={slot} onRemove={onRemove} />}
                 onRowSelectionChanged={isSelected => onIsSelectedChanged(slot.nzo_id, isSelected)}
+                onRowClick={() => setShowStats(x => !x)}
             />
+            {showStats && <ImportStatsRow nzoId={slot.nzo_id} colSpan={5} />}
             <ConfirmModal
                 show={isConfirmingRemoval}
                 title="Remove From History?"
