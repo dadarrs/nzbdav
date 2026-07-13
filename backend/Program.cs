@@ -94,6 +94,10 @@ class Program
         var configManager = new ConfigManager();
         await configManager.LoadConfig().ConfigureAwait(false);
 
+        // apply env.* config overrides to the process environment, now and on change
+        EnvOverrides.ApplyAll(configManager);
+        configManager.OnConfigChanged += (_, e) => EnvOverrides.ApplyChanged(e.ChangedConfig);
+
         // initialize rclone client
         RcloneClient.Initialize(configManager);
 
@@ -134,6 +138,7 @@ class Program
             .AddHostedService<DavCleanupService>()
             .AddHostedService<UsenetFileToBlobstoreMigrationService>()
             .AddHostedService<RemoveOrphanedFilesSchedulerService>()
+            .AddHostedService<ConfigFileService>()
             .AddScoped<DavDatabaseContext>()
             .AddScoped<DavDatabaseClient>()
             .AddScoped<DatabaseStore>()

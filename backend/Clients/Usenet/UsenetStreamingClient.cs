@@ -167,7 +167,8 @@ public class UsenetStreamingClient : WrappingNntpClient
             .Select((provider, index) => CreateProviderClient(
                 provider,
                 connectionPoolStats.GetOnConnectionPoolChanged(index),
-                effectiveNames[index]
+                effectiveNames[index],
+                configManager
             ))
             .ToList();
         // The flags are read through a delegate so toggling the settings takes effect
@@ -187,12 +188,15 @@ public class UsenetStreamingClient : WrappingNntpClient
     (
         UsenetProviderConfig.ConnectionDetails connectionDetails,
         EventHandler<ConnectionPoolStats.ConnectionPoolChangedEventArgs> onConnectionPoolChanged,
-        string effectiveName
+        string effectiveName,
+        ConfigManager configManager
     )
     {
+        // the factory reads the timeout config at connection-create time, so edits
+        // to the global timeout knobs reach new connections without a client rebuild
         var connectionPool = CreateNewConnectionPool(
             maxConnections: connectionDetails.MaxConnections,
-            connectionFactory: ct => CreateNewConnection(connectionDetails, ct),
+            connectionFactory: ct => CreateNewConnection(connectionDetails, ct, configManager),
             onConnectionPoolChanged
         );
         var circuitBreaker = new ProviderCircuitBreaker(connectionDetails.Host);
@@ -224,10 +228,16 @@ public class UsenetStreamingClient : WrappingNntpClient
     public static async ValueTask<INntpClient> CreateNewConnection
     (
         UsenetProviderConfig.ConnectionDetails connectionDetails,
-        CancellationToken ct
+        CancellationToken ct,
+        ConfigManager? configManager = null
     )
     {
         var connection = new BaseNntpClient();
+        // global timeout knobs (usenet.timeouts.*), file-editable via config.json
+        if (configManager != null)
+            connection.CommandTimeout = configManager.GetNntpCommandTimeout();
+        connection.TlsHandshakeTimeout = configManager?.GetNntpTlsHandshakeTimeout();
+        connection.StatPipelineIdleTimeout = configManager?.GetNntpStatPipelineIdleTimeout();
         var host = connectionDetails.Host;
         var port = connectionDetails.Port;
         var useSsl = connectionDetails.UseSsl;

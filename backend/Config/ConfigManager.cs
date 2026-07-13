@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Clients.Usenet.Concurrency;
 using NzbWebDAV.Database;
@@ -28,7 +29,7 @@ public class ConfigManager
         }
     }
 
-    private string? GetConfigValue(string configName)
+    private string? GetRawConfigValue(string configName)
     {
         lock (_config)
         {
@@ -36,10 +37,37 @@ public class ConfigManager
         }
     }
 
+    // ${VAR} references expand to environment values at read time; the stored
+    // value keeps the literal reference so exports/imports round-trip it.
+    private string? GetConfigValue(string configName)
+    {
+        var rawValue = GetRawConfigValue(configName);
+        return rawValue == null ? null : EnvExpansion.Expand(rawValue);
+    }
+
     private T? GetConfigValue<T>(string configName)
     {
-        var rawValue = StringUtil.EmptyToNull(GetConfigValue(configName));
-        return rawValue == null ? default : JsonSerializer.Deserialize<T>(rawValue);
+        var rawValue = StringUtil.EmptyToNull(GetRawConfigValue(configName));
+        if (rawValue == null) return default;
+        if (!rawValue.Contains("${")) return JsonSerializer.Deserialize<T>(rawValue);
+        // JSON-aware expansion: substitute inside string leaves only, so secrets
+        // containing quotes/backslashes can't corrupt the document.
+        var expanded = EnvExpansion.ExpandNode(JsonNode.Parse(rawValue));
+        return expanded == null ? default : expanded.Deserialize<T>();
+    }
+
+    /// <summary>
+    /// All current config entries whose key starts with the given prefix.
+    /// Used by the env.* override mechanism to seed process environment variables.
+    /// </summary>
+    public List<KeyValuePair<string, string>> GetValuesWithPrefix(string prefix)
+    {
+        lock (_config)
+        {
+            return _config
+                .Where(kv => kv.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
     }
 
     public void UpdateValues(List<ConfigItem> configItems)
@@ -207,6 +235,40 @@ public class ConfigManager
     {
         var configValue = StringUtil.EmptyToNull(GetConfigValue("metrics.stream-history-cleared-before"));
         return configValue != null && long.TryParse(configValue, out var value) ? value : 0L;
+    }
+
+    /// <summary>
+    /// Per-step NNTP deadline (connect, each command write / response read).
+    /// File/config editable only (usenet.timeouts.command-seconds); no UI surface.
+    /// </summary>
+    public TimeSpan GetNntpCommandTimeout()
+    {
+        return TimeSpan.FromSeconds(Math.Clamp(GetTimeoutSeconds("usenet.timeouts.command-seconds") ?? 10, 2, 300));
+    }
+
+    /// <summary>
+    /// Deadline for the TLS handshake specifically. null = same as the command timeout.
+    /// </summary>
+    public TimeSpan? GetNntpTlsHandshakeTimeout()
+    {
+        var seconds = GetTimeoutSeconds("usenet.timeouts.tls-handshake-seconds");
+        return seconds == null ? null : TimeSpan.FromSeconds(Math.Clamp(seconds.Value, 2, 300));
+    }
+
+    /// <summary>
+    /// Idle gap allowed between consecutive replies of a pipelined STAT batch.
+    /// null = twice the command timeout.
+    /// </summary>
+    public TimeSpan? GetNntpStatPipelineIdleTimeout()
+    {
+        var seconds = GetTimeoutSeconds("usenet.timeouts.stat-pipeline-idle-seconds");
+        return seconds == null ? null : TimeSpan.FromSeconds(Math.Clamp(seconds.Value, 2, 300));
+    }
+
+    private int? GetTimeoutSeconds(string configName)
+    {
+        var configValue = StringUtil.EmptyToNull(GetConfigValue(configName));
+        return configValue != null && int.TryParse(configValue, out var value) && value > 0 ? value : null;
     }
 
     /// <summary>

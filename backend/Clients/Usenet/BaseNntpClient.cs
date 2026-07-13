@@ -18,6 +18,30 @@ public class BaseNntpClient : NntpClient
 {
     private readonly UsenetClient _client = new();
 
+    /// <summary>
+    /// Per-step NNTP deadline (connect, TLS handshake, each command write / response
+    /// read). Defaults to the library's 10 s; set before ConnectAsync.
+    /// </summary>
+    public TimeSpan CommandTimeout
+    {
+        get => _client.CommandTimeout;
+        set => _client.CommandTimeout = value;
+    }
+
+    /// <summary>TLS handshake deadline. null = CommandTimeout.</summary>
+    public TimeSpan? TlsHandshakeTimeout
+    {
+        get => _client.TlsHandshakeTimeout;
+        set => _client.TlsHandshakeTimeout = value;
+    }
+
+    /// <summary>Pipelined-STAT idle-gap deadline. null = twice CommandTimeout.</summary>
+    public TimeSpan? StatPipelineIdleTimeout
+    {
+        get => _client.StatPipelineIdleTimeout;
+        set => _client.StatPipelineIdleTimeout = value;
+    }
+
     public override async Task ConnectAsync(string host, int port, bool useSsl, CancellationToken cancellationToken)
     {
         try
