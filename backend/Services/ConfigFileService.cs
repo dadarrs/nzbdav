@@ -47,13 +47,83 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
     // is the closest thing to a readable comment block at the top of the file.
     private static readonly string[] ReadmeLines =
     [
-        "Live export of nzbdav settings, grouped into sections (api, usenet, webdav, ...).",
+        "Live export of nzbdav settings. Sections mirror the WebUI Settings tabs, in tab order;",
+        "settings within a section follow their on-screen order. extras holds settings with no",
+        "UI surface, and env overrides environment variables (\"NAME\": \"value\", empty = unset).",
         "Edit and save: changes apply within seconds while nzbdav runs, or at next startup.",
         "Keys starting with _ are informational and ignored on import.",
         "Values may reference container environment variables as ${VAR}, e.g. \"Pass\": \"${PASS}\".",
         "References stay literal in this file and resolve when settings are read, so secrets can live in your .env.",
-        "The env section overrides environment variables: add \"NAME\": \"value\" there (empty value = unset).",
         "This file contains passwords and API keys -- redact before sharing.",
+    ];
+
+    // Mirrors the WebUI: one entry per Settings tab, in tab order, listing that
+    // tab's config keys in on-screen order. Keys absent from this manifest land
+    // in the trailing "extras" section. Keep in sync when the settings pages
+    // gain or move fields.
+    private static readonly (string Section, string[] Keys)[] UiSections =
+    [
+        ("usenet",
+        [
+            "usenet.providers",
+        ]),
+        ("sabnzbd",
+        [
+            "api.key",
+            "api.categories",
+            "api.manual-category",
+            "api.import-strategy",
+            "rclone.mount-dir",
+            "api.completed-downloads-dir",
+            "general.base-url",
+            "api.download-file-blocklist",
+            "api.duplicate-nzb-behavior",
+            "api.user-agent",
+            "api.ensure-importable-video",
+            "api.ensure-article-existence-categories",
+            "usenet.nntp-pipelining.enabled",
+            "usenet.nntp-pipelining.depth",
+            "api.backup-providers-for-health-checks",
+            "api.backup-providers-for-background-health-checks",
+        ]),
+        ("webdav",
+        [
+            "webdav.user",
+            "webdav.pass",
+            "usenet.max-download-connections",
+            "usenet.streaming-priority",
+            "usenet.article-buffer-size",
+            "webdav.enforce-readonly",
+            "webdav.active-stream-tracker",
+            "webdav.show-hidden-files",
+            "webdav.preview-par2-files",
+        ]),
+        ("radarr-sonarr",
+        [
+            "arr.instances",
+        ]),
+        ("repairs",
+        [
+            "media.library-dir",
+            "repair.enable",
+        ]),
+        ("rclone",
+        [
+            "rclone.host",
+            "rclone.user",
+            "rclone.pass",
+            "rclone.rc-enabled",
+        ]),
+        ("maintenance",
+        [
+            "db.is-startup-vacuum-enabled",
+            "maintenance.remove-orphaned-schedule-enabled",
+            "maintenance.remove-orphaned-schedule-time",
+        ]),
+        ("system",
+        [
+            "ui.theme",
+        ]),
     ];
 
     private static readonly string[] EnvironmentNoteLines =
@@ -75,7 +145,21 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
         {
             // Startup reconcile: an existing file that differs from the database is
             // an offline edit or a restored backup -- apply it, then normalize.
-            if (File.Exists(FilePath)) await ImportAsync(stoppingToken).ConfigureAwait(false);
+            if (File.Exists(FilePath))
+            {
+                var applied = await ImportAsync(stoppingToken).ConfigureAwait(false);
+                if (applied == 0)
+                    Log.Information("Config file check: {Path} matches the database", FilePath);
+                else
+                    Log.Information(
+                        "Config file check: applied {Count} setting(s) from {Path} (details above)",
+                        applied, FilePath);
+            }
+            else
+            {
+                Log.Information("Config file check: {Path} not found; creating it from current settings", FilePath);
+            }
+
             await ExportAsync(stoppingToken).ConfigureAwait(false);
 
             while (!stoppingToken.IsCancellationRequested)
@@ -171,28 +255,37 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
                 [EnvironmentKey] = BuildEnvironmentInfo(),
             };
 
-            // Group keys into sections by their first dot segment ("usenet.providers"
-            // lands in section "usenet" as "providers"), so related settings sit
-            // together under a visible heading. Keys without a dot stay top-level.
-            // configItems arrive sorted, so sections come out alphabetical too.
-            foreach (var item in configItems)
+            // WebUI-shaped sections: tabs in tab order, keys in on-screen order (full
+            // config keys, since a tab can mix prefixes). Whatever the manifest doesn't
+            // claim goes to "env" (overrides, as bare variable names) and "extras".
+            var remaining = configItems.ToDictionary(x => x.ConfigName, x => x.ConfigValue);
+            foreach (var (sectionName, keys) in UiSections)
             {
-                var dot = item.ConfigName.IndexOf('.');
-                if (dot <= 0)
+                var section = new JsonObject();
+                foreach (var key in keys)
                 {
-                    root[item.ConfigName] = ToFileValue(item.ConfigValue);
-                    continue;
+                    if (remaining.Remove(key, out var value))
+                        section[key] = ToFileValue(value);
                 }
 
-                var sectionName = item.ConfigName[..dot];
-                if (root[sectionName] is not JsonObject section)
-                {
-                    section = new JsonObject();
-                    root[sectionName] = section;
-                }
-
-                section[item.ConfigName[(dot + 1)..]] = ToFileValue(item.ConfigValue);
+                if (section.Count > 0) root[sectionName] = section;
             }
+
+            var envSection = new JsonObject();
+            foreach (var key in remaining.Keys
+                         .Where(k => k.StartsWith(EnvOverrides.Prefix, StringComparison.OrdinalIgnoreCase))
+                         .OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToList())
+            {
+                remaining.Remove(key, out var value);
+                envSection[key[EnvOverrides.Prefix.Length..]] = ToFileValue(value ?? "");
+            }
+
+            if (envSection.Count > 0) root["env"] = envSection;
+
+            var extras = new JsonObject();
+            foreach (var key in remaining.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToList())
+                extras[key] = ToFileValue(remaining[key]);
+            if (extras.Count > 0) root["extras"] = extras;
 
             // Relaxed escaping keeps quotes readable in the _readme lines; the file is
             // consumed by humans and this service only, never embedded in HTML.
@@ -222,7 +315,8 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
         }
     }
 
-    private async Task ImportAsync(CancellationToken ct)
+    /// <summary>Returns the number of settings applied from the file (0 = in sync or unreadable).</summary>
+    private async Task<int> ImportAsync(CancellationToken ct)
     {
         try
         {
@@ -240,13 +334,16 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
                 // change event (or poll tick) retries.
                 Log.Warning("Ignoring invalid {Path}: {Message}", FilePath, ex.Message);
                 _lastWrittenHash = Convert.ToHexString(SHA256.HashData(bytes));
-                return;
+                return 0;
             }
 
-            // Accepts both shapes: sectioned ("usenet": { "providers": ... }) and flat
-            // ("usenet.providers": ...). A dotless key with an object value is a section
-            // to flatten; anything else is a config key as-is -- unambiguous because
-            // real config keys always contain a dot, section names never do.
+            // Accepts every shape this file has ever had: WebUI-tab sections with full
+            // config keys as children, prefix sections with suffix children (childKey
+            // without a dot joins the section name, which is also how bare names in the
+            // env section become env.NAME), and plain flat keys at the top level. A
+            // dotless top-level key with an object value is a section to flatten;
+            // anything else is a config key as-is -- unambiguous because real config
+            // keys always contain a dot and section names never do.
             var fileValues = new Dictionary<string, string>();
             foreach (var (key, node) in root)
             {
@@ -256,7 +353,10 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
                     foreach (var (childKey, childNode) in section)
                     {
                         if (childKey.StartsWith('_')) continue;
-                        fileValues[$"{key}.{childKey}"] = FromFileValue(childNode);
+                        var configKey = childKey.Contains('.') || key is "extras" or "radarr-sonarr"
+                            ? childKey
+                            : $"{key}.{childKey}";
+                        fileValues[configKey] = FromFileValue(childNode);
                     }
                 }
                 else
@@ -264,7 +364,7 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
                     fileValues[key] = FromFileValue(node);
                 }
             }
-            if (fileValues.Count == 0) return;
+            if (fileValues.Count == 0) return 0;
 
             await using var dbContext = new DavDatabaseContext();
             var existingItems = await dbContext.ConfigItems
@@ -273,9 +373,11 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
             var changedItems = new List<ConfigItem>();
             foreach (var (key, value) in fileValues)
             {
+                string? previousValue = null;
                 if (existingItems.TryGetValue(key, out var existing))
                 {
                     if (existing.ConfigValue == value) continue;
+                    previousValue = existing.ConfigValue;
                     existing.ConfigValue = value;
                 }
                 else
@@ -283,14 +385,19 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
                     dbContext.ConfigItems.Add(new ConfigItem { ConfigName = key, ConfigValue = value });
                 }
 
+                Log.Information("Config file: {Key} changed: {Old} -> {New}",
+                    key,
+                    previousValue == null ? "(not set)" : DescribeValue(key, previousValue),
+                    DescribeValue(key, value));
                 changedItems.Add(new ConfigItem { ConfigName = key, ConfigValue = value });
             }
 
-            if (changedItems.Count == 0) return;
+            if (changedItems.Count == 0) return 0;
             await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             configManager.UpdateValues(changedItems);
             Log.Information("Applied {Count} setting(s) from {Path}: {Keys}",
                 changedItems.Count, FilePath, string.Join(", ", changedItems.Select(x => x.ConfigName)));
+            return changedItems.Count;
         }
         catch (OperationCanceledException)
         {
@@ -299,7 +406,34 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to import settings from {Path}", FilePath);
+            return 0;
         }
+    }
+
+    /// <summary>
+    /// Renders a config value for the change log. Secrets are obfuscated: keys that
+    /// look credential-bearing show dots (unless the value is a pure ${VAR} reference,
+    /// which is safe and informative to show), and JSON blobs -- which can carry
+    /// passwords in their fields -- never log their contents.
+    /// </summary>
+    private static string DescribeValue(string key, string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "(empty)";
+
+        var trimmed = value.TrimStart();
+        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+            return "(structured value; contents not logged)";
+
+        if (System.Text.RegularExpressions.Regex.IsMatch(value, @"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$"))
+            return value;
+
+        var sensitive = key.Contains("pass", StringComparison.OrdinalIgnoreCase)
+                        || key.Contains("key", StringComparison.OrdinalIgnoreCase)
+                        || key.Contains("secret", StringComparison.OrdinalIgnoreCase)
+                        || key.Contains("token", StringComparison.OrdinalIgnoreCase);
+        if (sensitive) return "•••";
+
+        return value.Length <= 80 ? value : value[..77] + "...";
     }
 
     private static JsonObject BuildEnvironmentInfo()
