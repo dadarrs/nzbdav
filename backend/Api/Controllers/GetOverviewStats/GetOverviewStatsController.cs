@@ -28,10 +28,26 @@ public class GetOverviewStatsController(
         0, 10, 25, 50, 100, 200, 400, 800, 1500, 3000, 6000, 12000, 30000, int.MaxValue
     };
 
+    // Building a window costs one pass over the metrics tables; a short TTL cache
+    // makes repeat visits and window switches instant without meaningfully staling
+    // the tiles (real-time numbers come over the websocket anyway).
+    private static readonly TimeSpan ResponseCacheTtl = TimeSpan.FromSeconds(15);
+
+    private static readonly System.Collections.Concurrent
+        .ConcurrentDictionary<GetOverviewStatsRequest.OverviewWindow,
+            (long BuiltAtMs, GetOverviewStatsResponse Response)> ResponseCache = new();
+
     protected override async Task<IActionResult> HandleRequest()
     {
         var request = new GetOverviewStatsRequest(HttpContext);
+
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        if (ResponseCache.TryGetValue(request.Window, out var cached) &&
+            nowMs - cached.BuiltAtMs < ResponseCacheTtl.TotalMilliseconds)
+            return Ok(cached.Response);
+
         var response = await BuildAsync(request).ConfigureAwait(false);
+        ResponseCache[request.Window] = (nowMs, response);
         return Ok(response);
     }
 
@@ -110,38 +126,52 @@ public class GetOverviewStatsController(
         }
         else
         {
-            // Short windows: raw fetches give us per-event detail (heatmap, latency, errors).
-            var fetches = await metrics.SegmentFetches
-                .Where(x => x.At >= windowStart)
-                .Select(x => new { x.At, x.Provider, x.Status, x.DurationMs, x.Retries })
-                .ToListAsync().ConfigureAwait(false);
-
-            var perMinuteBytes = await metrics.ProviderMinutes
+            // Short windows used to materialize every raw SegmentFetch row in the window
+            // through EF -- under heavy streaming that's millions of rows and seconds of
+            // load time per overview visit. The minute rollups carry everything the
+            // charts need at minute granularity; the few per-event details left (error
+            // types, latency distribution, last-minute tiles) are aggregated inside
+            // SQLite and return a handful of rows.
+            var minutes = await metrics.ProviderMinutes
                 .Where(p => p.Minute >= windowStart)
-                .GroupBy(p => p.Provider)
-                .Select(g => new { Provider = g.Key, Bytes = g.Sum(x => x.BytesFetched) })
-                .ToDictionaryAsync(x => x.Provider, x => x.Bytes).ConfigureAwait(false);
+                .Select(p => new
+                {
+                    p.Minute, p.Provider, p.Articles, p.BytesFetched,
+                    p.Errors, p.Retries, p.FailoverSaves, p.SumDurationMs,
+                })
+                .ToListAsync().ConfigureAwait(false);
 
             var sinceMinute = nowMs - OneMinute;
-            var articlesLastMinute = fetches.Count(f => f.At >= sinceMinute);
-            var errorsLastMinute = fetches.Count(f => f.At >= sinceMinute && f.Status != SegmentFetch.FetchStatus.Ok);
+            var lastMinuteCounts = await metrics.SegmentFetches
+                .Where(f => f.At >= sinceMinute)
+                .GroupBy(f => f.Status == SegmentFetch.FetchStatus.Ok)
+                .Select(g => new { Ok = g.Key, Count = g.LongCount() })
+                .ToListAsync().ConfigureAwait(false);
 
-            liveTiles = BuildLiveTiles(articlesLastMinute, errorsLastMinute);
-            throughput = BuildThroughput(fetches.Select(f => (f.At, f.Status)), sessions.Select(s => (s.EndedAt, s.BytesServed)), bucketSize);
-            providers = BuildProviders(fetches, perMinuteBytes, windowStart, bucketSize, window, nicknamesByHost);
-            latency = BuildLatency(fetches.Where(f => f.Status == SegmentFetch.FetchStatus.Ok).Select(f => f.DurationMs));
-            errors = BuildErrors(fetches.Select(f => f.Status));
-            totalArticles = throughput.Sum(p => p.Articles);
-            totalErrors = throughput.Sum(p => p.Errors);
-            totalBytesFetched = perMinuteBytes.Values.Sum();
+            liveTiles = BuildLiveTiles(
+                articlesLastMinute: lastMinuteCounts.Sum(x => x.Count),
+                errorsLastMinute: lastMinuteCounts.Where(x => !x.Ok).Sum(x => x.Count));
+            // the in-progress minute isn't rolled up yet; the live tiles above cover it
+            throughput = BuildThroughputFromHourly(
+                minutes.Select(m => (m.Minute, m.Articles, m.Errors, m.BytesFetched)),
+                sessions.Select(s => (s.EndedAt, s.BytesServed)),
+                bucketSize);
+            providers = BuildProvidersFromMinutes(
+                minutes.Select(m => (m.Minute, m.Provider, m.Articles, m.BytesFetched, m.Errors, m.Retries, m.SumDurationMs)),
+                windowStart, nicknamesByHost);
+            latency = await BuildLatencyAsync(metrics, windowStart).ConfigureAwait(false);
+            errors = await BuildErrorsAsync(metrics, windowStart).ConfigureAwait(false);
+            totalArticles = minutes.Sum(m => m.Articles);
+            totalErrors = minutes.Sum(m => m.Errors);
+            totalBytesFetched = minutes.Sum(m => m.BytesFetched);
             var failoverEdges = await metrics.FailoverMisses
                 .Where(f => f.At >= windowStart)
-                .Select(f => new { f.FromProvider, f.Reason })
+                .GroupBy(f => new { f.FromProvider, f.Reason })
+                .Select(g => new { g.Key.FromProvider, g.Key.Reason, Count = g.LongCount() })
                 .ToListAsync().ConfigureAwait(false);
             failover = BuildFailover(
-                fetches.Where(f => f.Status == SegmentFetch.FetchStatus.Ok && f.Retries > 0)
-                    .Select(f => (f.At, f.Provider, 1L)),
-                failoverEdges.Select(e => (e.FromProvider, e.Reason, 1L)),
+                minutes.Where(m => m.FailoverSaves > 0).Select(m => (m.Minute, m.Provider, m.FailoverSaves)),
+                failoverEdges.Select(e => (e.FromProvider, e.Reason, e.Count)),
                 totalArticles, sessions.Count, readsSaved, previousSaves, failoverBucket, nicknamesByHost);
         }
 
@@ -350,37 +380,6 @@ public class GetOverviewStatsController(
         };
     }
 
-    private static List<GetOverviewStatsResponse.ThroughputPoint> BuildThroughput(
-        IEnumerable<(long At, SegmentFetch.FetchStatus Status)> fetches,
-        IEnumerable<(long EndedAt, long BytesServed)> sessions,
-        long bucketSize)
-    {
-        var byBucket = new Dictionary<long, (long Articles, long Errors, long BytesServed)>();
-        foreach (var (at, status) in fetches)
-        {
-            var b = at - (at % bucketSize);
-            byBucket.TryGetValue(b, out var cur);
-            byBucket[b] = (cur.Articles + 1, cur.Errors + (status != SegmentFetch.FetchStatus.Ok ? 1 : 0), cur.BytesServed);
-        }
-        foreach (var (endedAt, bytes) in sessions)
-        {
-            var b = endedAt - (endedAt % bucketSize);
-            byBucket.TryGetValue(b, out var cur);
-            byBucket[b] = (cur.Articles, cur.Errors, cur.BytesServed + bytes);
-        }
-
-        return byBucket
-            .OrderBy(kv => kv.Key)
-            .Select(kv => new GetOverviewStatsResponse.ThroughputPoint
-            {
-                Bucket = kv.Key,
-                Articles = kv.Value.Articles,
-                Errors = kv.Value.Errors,
-                BytesServed = kv.Value.BytesServed,
-            })
-            .ToList();
-    }
-
     private static List<GetOverviewStatsResponse.ThroughputPoint> BuildThroughputFromHourly(
         IEnumerable<(long Hour, long Articles, long Errors, long BytesFetched)> hours,
         IEnumerable<(long EndedAt, long BytesServed)> sessions,
@@ -412,51 +411,6 @@ public class GetOverviewStatsController(
             .ToList();
     }
 
-    private static List<GetOverviewStatsResponse.ProviderRow> BuildProviders<T>(
-        List<T> fetches,
-        IReadOnlyDictionary<string, long> bytesByProvider,
-        long windowStart,
-        long bucketSize,
-        GetOverviewStatsRequest.OverviewWindow window,
-        IReadOnlyDictionary<string, string?> nicknamesByHost) where T : class
-    {
-        var is7d = window == GetOverviewStatsRequest.OverviewWindow.Last7Days;
-        var sparkBuckets = is7d ? 168 : 24;
-        var sparkSize = OneHour;
-        var sparkStart = windowStart - (windowStart % sparkSize);
-
-        var byProvider = new Dictionary<string, ProviderAccumulator>();
-        foreach (var f in fetches.Cast<dynamic>())
-        {
-            string host = f.Provider;
-            if (!byProvider.TryGetValue(host, out var acc))
-                acc = new ProviderAccumulator(sparkBuckets);
-            acc.Articles++;
-            acc.SumDurationMs += f.DurationMs;
-            if (f.Status != SegmentFetch.FetchStatus.Ok) acc.Errors++;
-            acc.Retries += f.Retries;
-            var idx = (int)(((long)f.At - sparkStart) / sparkSize);
-            if (idx >= 0 && idx < sparkBuckets) acc.Spark[idx]++;
-            byProvider[host] = acc;
-        }
-
-        return byProvider
-            .Select(kv => new GetOverviewStatsResponse.ProviderRow
-            {
-                Provider = kv.Key,
-                Nickname = nicknamesByHost.GetValueOrDefault(kv.Key),
-                Articles = kv.Value.Articles,
-                BytesFetched = bytesByProvider.GetValueOrDefault(kv.Key, 0L),
-                Errors = kv.Value.Errors,
-                Retries = kv.Value.Retries,
-                AvgDurationMs = kv.Value.Articles > 0 ? (double)kv.Value.SumDurationMs / kv.Value.Articles : 0,
-                ErrorRate = kv.Value.Articles > 0 ? (double)kv.Value.Errors / kv.Value.Articles : 0,
-                Spark = kv.Value.Spark.ToList(),
-            })
-            .OrderByDescending(r => r.Articles)
-            .ToList();
-    }
-
     private static List<GetOverviewStatsResponse.ProviderRow> BuildProvidersFromHourly(
         IEnumerable<dynamic> hours,
         long windowStart,
@@ -484,6 +438,51 @@ public class GetOverviewStatsController(
             var idx = (int)(((long)h.Hour - sparkStart) / sparkSize);
             if (idx >= 0 && idx < sparkBuckets) acc.Spark[idx] += (long)h.Articles;
             byProvider[host] = acc;
+        }
+
+        return byProvider
+            .Select(kv => new GetOverviewStatsResponse.ProviderRow
+            {
+                Provider = kv.Key,
+                Nickname = nicknamesByHost.GetValueOrDefault(kv.Key),
+                Articles = kv.Value.Articles,
+                BytesFetched = kv.Value.Bytes,
+                Errors = kv.Value.Errors,
+                Retries = kv.Value.Retries,
+                AvgDurationMs = kv.Value.Articles > 0 ? (double)kv.Value.SumDurationMs / kv.Value.Articles : 0,
+                ErrorRate = kv.Value.Articles > 0 ? (double)kv.Value.Errors / kv.Value.Articles : 0,
+                Spark = kv.Value.Spark.ToList(),
+            })
+            .OrderByDescending(r => r.Articles)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Short-window provider scoreboard from minute rollups (hourly sparks, same
+    /// as the raw-fetch path used to produce). Bytes ride the same rows, so no
+    /// separate per-provider byte query is needed.
+    /// </summary>
+    private static List<GetOverviewStatsResponse.ProviderRow> BuildProvidersFromMinutes(
+        IEnumerable<(long Minute, string Provider, long Articles, long BytesFetched, long Errors, long Retries, long SumDurationMs)> minutes,
+        long windowStart,
+        IReadOnlyDictionary<string, string?> nicknamesByHost)
+    {
+        const int sparkBuckets = 24;
+        var sparkSize = OneHour;
+        var sparkStart = windowStart - (windowStart % sparkSize);
+
+        var byProvider = new Dictionary<string, ProviderAccumulator>();
+        foreach (var m in minutes)
+        {
+            if (!byProvider.TryGetValue(m.Provider, out var acc))
+                byProvider[m.Provider] = acc = new ProviderAccumulator(sparkBuckets);
+            acc.Articles += m.Articles;
+            acc.Errors += m.Errors;
+            acc.Retries += m.Retries;
+            acc.SumDurationMs += m.SumDurationMs;
+            acc.Bytes += m.BytesFetched;
+            var idx = (int)((m.Minute - sparkStart) / sparkSize);
+            if (idx >= 0 && idx < sparkBuckets) acc.Spark[idx] += m.Articles;
         }
 
         return byProvider
@@ -583,38 +582,6 @@ public class GetOverviewStatsController(
         return thisWeekMonday - 52 * 7 * OneDay;
     }
 
-    private static GetOverviewStatsResponse.LatencyBlock BuildLatency(IEnumerable<int> okDurationsMs)
-    {
-        var samples = okDurationsMs.ToList();
-        if (samples.Count == 0) return new GetOverviewStatsResponse.LatencyBlock();
-
-        samples.Sort();
-        int Pct(double p)
-        {
-            var idx = (int)Math.Ceiling(p * samples.Count) - 1;
-            return samples[Math.Clamp(idx, 0, samples.Count - 1)];
-        }
-
-        var buckets = new List<GetOverviewStatsResponse.LatencyBucket>();
-        for (var i = 0; i < LatencyBucketEdges.Length - 1; i++)
-        {
-            var lo = LatencyBucketEdges[i];
-            var hi = LatencyBucketEdges[i + 1];
-            var count = samples.Count(d => d >= lo && d < hi);
-            if (count == 0 && lo > 0) continue;
-            buckets.Add(new GetOverviewStatsResponse.LatencyBucket { LoMs = lo, HiMs = hi, Count = count });
-        }
-
-        return new GetOverviewStatsResponse.LatencyBlock
-        {
-            P50Ms = Pct(0.50),
-            P95Ms = Pct(0.95),
-            P99Ms = Pct(0.99),
-            Samples = samples.Count,
-            Buckets = buckets,
-        };
-    }
-
     private static List<GetOverviewStatsResponse.ErrorSlice> BuildErrors(IEnumerable<SegmentFetch.FetchStatus> statuses)
     {
         var counts = new Dictionary<SegmentFetch.FetchStatus, long>();
@@ -633,6 +600,102 @@ public class GetOverviewStatsController(
             })
             .OrderByDescending(s => s.Count)
             .ToList();
+    }
+
+    /// <summary>
+    /// Error donut counted inside SQLite: one grouped scan over the window, a
+    /// handful of rows out, instead of materializing every fetch through EF.
+    /// </summary>
+    private static async Task<List<GetOverviewStatsResponse.ErrorSlice>> BuildErrorsAsync(
+        MetricsDbContext metrics, long windowStart)
+    {
+        var counts = await metrics.SegmentFetches
+            .Where(f => f.At >= windowStart && f.Status != SegmentFetch.FetchStatus.Ok)
+            .GroupBy(f => f.Status)
+            .Select(g => new { Status = g.Key, Count = g.LongCount() })
+            .ToListAsync().ConfigureAwait(false);
+
+        return counts
+            .Select(x => new GetOverviewStatsResponse.ErrorSlice
+            {
+                Status = x.Status.ToString(),
+                Count = x.Count,
+            })
+            .OrderByDescending(s => s.Count)
+            .ToList();
+    }
+
+    private sealed class LatencyBucketRow
+    {
+        public int Bucket { get; set; }
+        public long Count { get; set; }
+    }
+
+    /// <summary>
+    /// Latency histogram bucketed inside SQLite via a CASE ladder over the fixed
+    /// log-scale edges: the scan stays native and only ~14 rows cross into .NET.
+    /// Percentiles are read off the bucket edges (display-grade accuracy).
+    /// </summary>
+    private static async Task<GetOverviewStatsResponse.LatencyBlock> BuildLatencyAsync(
+        MetricsDbContext metrics, long windowStart)
+    {
+        var caseSql = new System.Text.StringBuilder("CASE ");
+        for (var i = 1; i < LatencyBucketEdges.Length - 1; i++)
+            caseSql.Append($"WHEN DurationMs < {LatencyBucketEdges[i]} THEN {i - 1} ");
+        caseSql.Append($"ELSE {LatencyBucketEdges.Length - 2} END");
+
+        var rows = await metrics.Database
+            .SqlQueryRaw<LatencyBucketRow>(
+                $$"""
+                  SELECT {{caseSql}} AS Bucket, COUNT(*) AS Count
+                  FROM SegmentFetches
+                  WHERE At >= {0} AND Status = 0
+                  GROUP BY Bucket
+                  """, windowStart)
+            .ToListAsync().ConfigureAwait(false);
+
+        var bucketCount = LatencyBucketEdges.Length - 1;
+        var counts = new long[bucketCount];
+        foreach (var row in rows)
+            counts[Math.Clamp(row.Bucket, 0, bucketCount - 1)] += row.Count;
+        var total = counts.Sum();
+        if (total == 0) return new GetOverviewStatsResponse.LatencyBlock();
+
+        int Pct(double p)
+        {
+            var threshold = (long)Math.Ceiling(p * total);
+            long cumulative = 0;
+            for (var i = 0; i < bucketCount; i++)
+            {
+                cumulative += counts[i];
+                if (cumulative >= threshold)
+                    // upper edge of the bucket; the open-ended last bucket reports its floor
+                    return i == bucketCount - 1 ? LatencyBucketEdges[i] : LatencyBucketEdges[i + 1];
+            }
+
+            return LatencyBucketEdges[bucketCount - 1];
+        }
+
+        var buckets = new List<GetOverviewStatsResponse.LatencyBucket>();
+        for (var i = 0; i < bucketCount; i++)
+        {
+            if (counts[i] == 0 && LatencyBucketEdges[i] > 0) continue;
+            buckets.Add(new GetOverviewStatsResponse.LatencyBucket
+            {
+                LoMs = LatencyBucketEdges[i],
+                HiMs = LatencyBucketEdges[i + 1],
+                Count = counts[i],
+            });
+        }
+
+        return new GetOverviewStatsResponse.LatencyBlock
+        {
+            P50Ms = Pct(0.50),
+            P95Ms = Pct(0.95),
+            P99Ms = Pct(0.99),
+            Samples = (int)Math.Min(total, int.MaxValue),
+            Buckets = buckets,
+        };
     }
 
     private async Task<GetOverviewStatsResponse.CatalogueBlock> BuildCatalogueAsync()
