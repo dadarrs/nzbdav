@@ -97,6 +97,14 @@
     }
 }
 
+.clickable {
+    cursor: pointer;
+}
+
+.clickable:hover td {
+    background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+
 .tableContainer:not(:has(.footer)) .table tbody tr:last-child td {
     border-bottom: none;
 }

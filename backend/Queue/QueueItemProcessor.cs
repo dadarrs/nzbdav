@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Api.SabControllers.GetHistory;
 using NzbWebDAV.Clients.RadarrSonarr;
@@ -6,6 +7,7 @@ using NzbWebDAV.Clients.Usenet;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
+using NzbWebDAV.Database.Models.Metrics;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Models.Nzb;
 using NzbWebDAV.Queue.DeobfuscationSteps._1.FetchFirstSegment;
@@ -15,6 +17,7 @@ using NzbWebDAV.Queue.FileAggregators;
 using NzbWebDAV.Queue.FileProcessors;
 using NzbWebDAV.Queue.PostProcessors;
 using NzbWebDAV.Services;
+using NzbWebDAV.Services.Metrics;
 using NzbWebDAV.Utils;
 using NzbWebDAV.Websocket;
 using Serilog;
@@ -38,6 +41,8 @@ public class QueueItemProcessor(
         var startTime = DateTime.Now;
         // tag this async flow so per-provider metrics attribute segment fetches to this item
         using var usageScope = ProviderUsageTracker.BeginScope(queueItem.Id);
+        // collect per-phase timings and per-provider traffic for the import-stats row
+        using var importStatsScope = ImportStatsCollector.BeginScope(new ImportStatsCollector());
         _ = websocketManager.SendMessage(WebsocketTopic.QueueItemStatus, $"{queueItem.Id}|Downloading");
 
         // process the job
@@ -155,6 +160,7 @@ public class QueueItemProcessor(
             .ToList();
 
         // step 3 -- Optionally check full article existence
+        ImportStatsCollector.Ambient.Value?.MarkDownloadEnded();
         var checkedFullHealth = false;
         var healthCheckCategories = configManager.GetEnsureArticleExistenceCategories();
         if (healthCheckCategories.Contains(queueItem.Category.ToLower()))
@@ -173,6 +179,7 @@ public class QueueItemProcessor(
                 .CheckAllSegmentsAsync(articlesToCheck, healthCheckConcurrency, part3Progress, ct)
                 .ConfigureAwait(false);
             checkedFullHealth = true;
+            ImportStatsCollector.Ambient.Value?.MarkVerifyEnded();
         }
 
         // update the database
@@ -368,6 +375,51 @@ public class QueueItemProcessor(
         _ = websocketManager.SendMessage(WebsocketTopic.HistoryItemAdded, historySlot.ToJson());
         _ = DavDatabaseContext.RcloneVfsForget(["/nzbs"]);
         _ = RefreshMonitoredDownloads();
+        await WriteImportStatsAsync(error).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Persists the per-phase timing and per-provider traffic breakdown collected
+    /// during this import, keyed by the item id the HistoryItem shares. Best-effort:
+    /// a metrics hiccup must never fail a completed import.
+    /// </summary>
+    private async Task WriteImportStatsAsync(string? error)
+    {
+        var collector = ImportStatsCollector.Ambient.Value;
+        if (collector == null) return;
+        try
+        {
+            var now = DateTimeOffset.UtcNow;
+            var downloadEnd = collector.DownloadEndedAt ?? now;
+            var providers = collector.Snapshot()
+                .Select(x => new
+                {
+                    Provider = x.Provider,
+                    x.Counters.DownloadBytes,
+                    x.Counters.VerifyBytes,
+                    x.Counters.Articles,
+                });
+
+            await using var metrics = new MetricsDbContext();
+            metrics.ImportStats.Add(new ImportStat
+            {
+                Id = queueItem.Id,
+                JobName = queueItem.JobName,
+                CompletedAt = now.ToUnixTimeMilliseconds(),
+                DownloadMs = (int)Math.Clamp((downloadEnd - collector.StartedAt).TotalMilliseconds, 0, int.MaxValue),
+                VerifyMs = collector.VerifyEndedAt is { } verifyEnd
+                    ? (int)Math.Clamp((verifyEnd - downloadEnd).TotalMilliseconds, 0, int.MaxValue)
+                    : null,
+                TotalMs = (int)Math.Clamp((now - collector.StartedAt).TotalMilliseconds, 0, int.MaxValue),
+                Failed = error != null,
+                ProviderBytesJson = JsonSerializer.Serialize(providers),
+            });
+            await metrics.SaveChangesAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to record import stats for {JobName}", queueItem.JobName);
+        }
     }
 
     private async Task RefreshMonitoredDownloads()

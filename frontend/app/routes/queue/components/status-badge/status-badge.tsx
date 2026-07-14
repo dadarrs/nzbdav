@@ -7,10 +7,13 @@ export type StatusBadgeProps = {
     status: string,
     percentage?: string,
     error?: string,
+    // set false on rows whose click already opens a detail view (e.g. history
+    // rows expanding import stats) so the badge's click-tooltip doesn't compete
+    errorTooltip?: boolean,
 }
 
 
-export function StatusBadge({ className, status, percentage, error }: StatusBadgeProps) {
+export function StatusBadge({ className, status, percentage, error, errorTooltip = true }: StatusBadgeProps) {
     const statusLower = status?.toLowerCase();
 
     if (statusLower === "completed") {
@@ -31,13 +34,18 @@ export function StatusBadge({ className, status, percentage, error }: StatusBadg
         if (error?.startsWith("Article with message-id"))
             error = "Missing articles";
 
+        const badge = (
+            <div className={classNames([styles.container, errorTooltip && styles.failureBadge])}>
+                <div className={styles.badge} style={{ backgroundColor: "rgba(var(--bs-danger-rgb)" }}>
+                    <div className={badgeTextClass}>{'failed'}</div>
+                </div>
+            </div>
+        );
+
+        if (!errorTooltip) return badge;
         return (
             <OverlayTrigger placement="top" overlay={<Tooltip>{error}</Tooltip>} trigger="click">
-                <div className={classNames([styles.container, styles.failureBadge])}>
-                    <div className={styles.badge} style={{ backgroundColor: "rgba(var(--bs-danger-rgb)" }}>
-                        <div className={badgeTextClass}>{'failed'}</div>
-                    </div>
-                </div>
+                {badge}
             </OverlayTrigger >
         );
     }

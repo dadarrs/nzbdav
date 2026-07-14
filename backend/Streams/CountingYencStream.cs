@@ -37,6 +37,9 @@ public sealed class CountingYencStream : YencStream
         if (n > 0)
         {
             _tracker.Add(_host, n);
+            // during an import these reads run inside the processor's async flow,
+            // so the ambient collector (when present) attributes them to the item
+            ImportStatsCollector.Ambient.Value?.AddBytes(_host, n);
             _bytes += n;
         }
         return n;

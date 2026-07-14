@@ -261,6 +261,7 @@ public class MultiProviderNntpClient(
 
                 RecordFetch(provider.Name, SegmentFetch.FetchStatus.Ok, stopwatch.ElapsedMilliseconds, i);
                 usageTracker?.RecordSuccess(provider.Name);
+                ImportStatsCollector.Ambient.Value?.AddArticle(provider.Name);
                 if (priorMisses is { Count: > 0 })
                 {
                     // A later provider rescued a segment the earlier ones missed/failed.
@@ -351,6 +352,9 @@ public class MultiProviderNntpClient(
         foreach (var result in subResults) bytes += result.ResponseMessage.Length + 2;
         var isBackground = ct.GetContext<BackgroundHealthCheckContext>() is not null;
         bytesTracker.AddHealthBytes(host, bytes, isBackground);
+        // on-add checks run inside the import's ambient scope (verify phase);
+        // background checks have no scope, so this is a no-op for them
+        ImportStatsCollector.Ambient.Value?.AddBytes(host, bytes);
     }
 
     private static SegmentFetch.FetchStatus ClassifyException(Exception ex)
