@@ -74,7 +74,8 @@ export function PageRow(props: PageRowProps) {
                     <Truncate>{props.name}</Truncate>
                     <div className={styles.mobile}>
                         <div className={styles.badges}>
-                            <StatusBadge status={props.status} percentage={props.percentage} error={props.error} />
+                            <StatusBadge status={props.status} percentage={props.percentage} error={props.error}
+                                errorTooltip={!props.onRowClick} />
                             <CategoryBadge category={props.category} />
                         </div>
                         <div>{formatFileSize(props.fileSizeBytes)}</div>
@@ -85,7 +86,8 @@ export function PageRow(props: PageRowProps) {
                 <CategoryBadge category={props.category} />
             </td>
             <td className={styles.desktop}>
-                <StatusBadge status={props.status} percentage={props.percentage} error={props.error} />
+                <StatusBadge status={props.status} percentage={props.percentage} error={props.error}
+                    errorTooltip={!props.onRowClick} />
             </td>
             <td className={styles.desktop}>
                 {formatFileSize(props.fileSizeBytes)}

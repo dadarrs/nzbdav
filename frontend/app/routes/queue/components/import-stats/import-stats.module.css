@@ -24,6 +24,19 @@
     font-size: 12px;
 }
 
+/* full failure message for failed imports; the status badge's click-tooltip is
+   suppressed on expandable rows, so this is where the reason lives */
+.failMessage {
+    color: var(--danger-muted);
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
 /* section micro-label + faint hint */
 .title {
     display: flex;

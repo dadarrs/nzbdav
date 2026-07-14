@@ -24,11 +24,14 @@ type ImportStatsResponse = {
 export type ImportStatsRowProps = {
     nzoId: string,
     colSpan: number,
+    // the history item's failure message; shown here in full since the status
+    // badge no longer opens its own tooltip on expandable rows
+    failMessage?: string | null,
 };
 
 /// Expanded detail row under a history item: how long the download (blue) and
 /// verify (green) phases took, and which providers served how much for each.
-export function ImportStatsRow({ nzoId, colSpan }: ImportStatsRowProps) {
+export function ImportStatsRow({ nzoId, colSpan, failMessage }: ImportStatsRowProps) {
     const [data, setData] = useState<ImportStatsResponse | "loading" | "error">("loading");
 
     useEffect(() => {
@@ -50,6 +53,7 @@ export function ImportStatsRow({ nzoId, colSpan }: ImportStatsRowProps) {
         <tr className={styles.detailsTr}>
             <td colSpan={colSpan} className={styles.detailsTd}>
                 <div className={styles.panel}>
+                    {failMessage && <div className={styles.failMessage}>{failMessage}</div>}
                     {data === "loading" && <div className={styles.muted}>Loading import stats…</div>}
                     {data === "error" && <div className={styles.muted}>Could not load import stats.</div>}
                     {data !== "loading" && data !== "error" && !data.found && (
@@ -71,7 +75,7 @@ function StatsContent({ data }: { data: ImportStatsResponse }) {
             <div className={styles.title}>
                 Import stats
                 <span className={styles.titleNote}>
-                    · import process only — streaming and background health checks not included
+                    · covers the import process only
                 </span>
             </div>
             <div className={styles.phases}>
