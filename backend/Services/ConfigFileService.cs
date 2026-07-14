@@ -145,7 +145,21 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
         {
             // Startup reconcile: an existing file that differs from the database is
             // an offline edit or a restored backup -- apply it, then normalize.
-            if (File.Exists(FilePath)) await ImportAsync(stoppingToken).ConfigureAwait(false);
+            if (File.Exists(FilePath))
+            {
+                var applied = await ImportAsync(stoppingToken).ConfigureAwait(false);
+                if (applied == 0)
+                    Log.Information("Config file check: {Path} matches the database", FilePath);
+                else
+                    Log.Information(
+                        "Config file check: applied {Count} setting(s) from {Path} (details above)",
+                        applied, FilePath);
+            }
+            else
+            {
+                Log.Information("Config file check: {Path} not found; creating it from current settings", FilePath);
+            }
+
             await ExportAsync(stoppingToken).ConfigureAwait(false);
 
             while (!stoppingToken.IsCancellationRequested)
@@ -301,7 +315,8 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
         }
     }
 
-    private async Task ImportAsync(CancellationToken ct)
+    /// <summary>Returns the number of settings applied from the file (0 = in sync or unreadable).</summary>
+    private async Task<int> ImportAsync(CancellationToken ct)
     {
         try
         {
@@ -319,7 +334,7 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
                 // change event (or poll tick) retries.
                 Log.Warning("Ignoring invalid {Path}: {Message}", FilePath, ex.Message);
                 _lastWrittenHash = Convert.ToHexString(SHA256.HashData(bytes));
-                return;
+                return 0;
             }
 
             // Accepts every shape this file has ever had: WebUI-tab sections with full
@@ -349,7 +364,7 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
                     fileValues[key] = FromFileValue(node);
                 }
             }
-            if (fileValues.Count == 0) return;
+            if (fileValues.Count == 0) return 0;
 
             await using var dbContext = new DavDatabaseContext();
             var existingItems = await dbContext.ConfigItems
@@ -358,9 +373,11 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
             var changedItems = new List<ConfigItem>();
             foreach (var (key, value) in fileValues)
             {
+                string? previousValue = null;
                 if (existingItems.TryGetValue(key, out var existing))
                 {
                     if (existing.ConfigValue == value) continue;
+                    previousValue = existing.ConfigValue;
                     existing.ConfigValue = value;
                 }
                 else
@@ -368,14 +385,19 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
                     dbContext.ConfigItems.Add(new ConfigItem { ConfigName = key, ConfigValue = value });
                 }
 
+                Log.Information("Config file: {Key} changed: {Old} -> {New}",
+                    key,
+                    previousValue == null ? "(not set)" : DescribeValue(key, previousValue),
+                    DescribeValue(key, value));
                 changedItems.Add(new ConfigItem { ConfigName = key, ConfigValue = value });
             }
 
-            if (changedItems.Count == 0) return;
+            if (changedItems.Count == 0) return 0;
             await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             configManager.UpdateValues(changedItems);
             Log.Information("Applied {Count} setting(s) from {Path}: {Keys}",
                 changedItems.Count, FilePath, string.Join(", ", changedItems.Select(x => x.ConfigName)));
+            return changedItems.Count;
         }
         catch (OperationCanceledException)
         {
@@ -384,7 +406,34 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to import settings from {Path}", FilePath);
+            return 0;
         }
+    }
+
+    /// <summary>
+    /// Renders a config value for the change log. Secrets are obfuscated: keys that
+    /// look credential-bearing show dots (unless the value is a pure ${VAR} reference,
+    /// which is safe and informative to show), and JSON blobs -- which can carry
+    /// passwords in their fields -- never log their contents.
+    /// </summary>
+    private static string DescribeValue(string key, string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "(empty)";
+
+        var trimmed = value.TrimStart();
+        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+            return "(structured value; contents not logged)";
+
+        if (System.Text.RegularExpressions.Regex.IsMatch(value, @"^\$\{[A-Za-z_][A-Za-z0-9_]*\}$"))
+            return value;
+
+        var sensitive = key.Contains("pass", StringComparison.OrdinalIgnoreCase)
+                        || key.Contains("key", StringComparison.OrdinalIgnoreCase)
+                        || key.Contains("secret", StringComparison.OrdinalIgnoreCase)
+                        || key.Contains("token", StringComparison.OrdinalIgnoreCase);
+        if (sensitive) return "•••";
+
+        return value.Length <= 80 ? value : value[..77] + "...";
     }
 
     private static JsonObject BuildEnvironmentInfo()
