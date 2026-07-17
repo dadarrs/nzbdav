@@ -26,7 +26,26 @@ public sealed class ConnectionPool<T> : IDisposable, IAsyncDisposable
     public int LiveConnections => _live;
     public int IdleConnections => _idleConnections.Count;
     public int ActiveConnections => _live - _idleConnections.Count;
-    public int AvailableConnections => _maxConnections - ActiveConnections;
+
+    /// <summary>
+    /// How many more callers this pool can admit right now. Measured from permits held
+    /// rather than from live connections, so a caller that has been admitted but is still
+    /// opening its connection counts against capacity.
+    /// <para>
+    /// Counting live connections instead under-reports commitment for as long as a
+    /// connection takes to establish, which lets a burst of callers all read the same
+    /// stale "plenty free" and pile onto one provider. Callers that pick a provider by
+    /// spare capacity (see MultiProviderNntpClient.GetOrderedProviders) need the
+    /// committed count to spill correctly.
+    /// </para>
+    /// <para>
+    /// Note this still trusts <c>maxConnections</c> as the ceiling. A provider configured
+    /// above what it will actually grant -- refusing the surplus with "502 too many
+    /// connections" -- reports free slots again once the refusals settle, so callers keep
+    /// being offered it. The cure for that is to configure the real allowance.
+    /// </para>
+    /// </summary>
+    public int AvailableConnections => _maxConnections - _gate.EnteredCount;
 
     public event EventHandler<ConnectionPoolStats.ConnectionPoolChangedEventArgs>? OnConnectionPoolChanged;
 

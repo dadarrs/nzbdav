@@ -3,6 +3,7 @@ using System.Runtime.ExceptionServices;
 using NzbWebDAV.Clients.Usenet.Contexts;
 using NzbWebDAV.Clients.Usenet.Models;
 using NzbWebDAV.Database.Models.Metrics;
+using NzbWebDAV.Exceptions;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Models;
 using NzbWebDAV.Services;
@@ -104,8 +105,11 @@ public class MultiProviderNntpClient(
                 var idx = pending[k];
                 var result = subResults[k];
                 results[idx] = result;
-                // Only keep re-querying segments this provider says are missing.
-                if (result.ResponseType == UsenetResponseType.NoArticleWithThatMessageId)
+                // Only an explicit "article exists" is a final answer. "No article with that
+                // message-id" means ask the next provider. Anything else is not an answer at
+                // all -- e.g. 480 from a connection whose login was refused -- so re-query it
+                // rather than letting it stand as this provider's verdict.
+                if (result.ResponseType != UsenetResponseType.ArticleExists)
                     stillPending.Add(idx);
             }
 
@@ -116,10 +120,23 @@ public class MultiProviderNntpClient(
         // that as an error rather than silently reporting the article as missing.
         for (var i = 0; i < results.Length; i++)
         {
-            if (results[i] is null)
+            var result = results[i];
+            if (result is null)
             {
                 if (lastException is not null) lastException.Throw();
                 throw new Exception("There are no usenet providers configured.");
+            }
+
+            // Likewise, a reply that is neither "exists" nor "missing" says nothing about the
+            // article. Every provider having answered that way is a provider fault, so fail
+            // loudly -- a false "missing" here would send healthy media to repair or deletion.
+            if (result.ResponseType is not (UsenetResponseType.ArticleExists
+                or UsenetResponseType.NoArticleWithThatMessageId))
+            {
+                if (lastException is not null) lastException.Throw();
+                throw new Exception(
+                    $"Unexpected STAT response for {segmentIds[i]}: " +
+                    $"{result.ResponseCode} {result.ResponseMessage}");
             }
         }
 
@@ -259,6 +276,19 @@ public class MultiProviderNntpClient(
                     return result;
                 }
 
+                // Any other unsuccessful reply is a provider fault rather than a verdict on the
+                // article -- 480 from a connection whose login was refused, say. Treat it like a
+                // thrown error so the next provider gets a turn, instead of handing the caller a
+                // response it will read as "not found".
+                if (!result.Success)
+                {
+                    RecordFetch(provider.Name, SegmentFetch.FetchStatus.Other, stopwatch.ElapsedMilliseconds, i);
+                    (priorMisses ??= []).Add((provider.Name, SegmentFetch.FetchStatus.Other));
+                    lastException = ExceptionDispatchInfo.Capture(new Exception(
+                        $"Provider {provider.Name} returned {result.ResponseCode} {result.ResponseMessage}"));
+                    continue;
+                }
+
                 RecordFetch(provider.Name, SegmentFetch.FetchStatus.Ok, stopwatch.ElapsedMilliseconds, i);
                 usageTracker?.RecordSuccess(provider.Name);
                 ImportStatsCollector.Ambient.Value?.AddArticle(provider.Name);
@@ -361,6 +391,10 @@ public class MultiProviderNntpClient(
     {
         if (ex is TimeoutException) return SegmentFetch.FetchStatus.Timeout;
         if (ex is UnauthorizedAccessException) return SegmentFetch.FetchStatus.Auth;
+        // A refused login lands here -- including "502 too many connections", which is how a
+        // provider reports that the configured connection count exceeds what it will grant.
+        // Classifying it as Auth rather than Other makes that visible in the error donut.
+        if (ex.TryGetCausingException(out CouldNotLoginToUsenetException _)) return SegmentFetch.FetchStatus.Auth;
         if (ex is IOException or System.Net.Sockets.SocketException) return SegmentFetch.FetchStatus.Network;
         return SegmentFetch.FetchStatus.Other;
     }

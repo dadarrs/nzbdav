@@ -25,6 +25,19 @@ public class PrioritizedSemaphore : IDisposable
     private readonly Lock _lock = new();
     private int _accumulatedOdds;
 
+    /// <summary>
+    /// Permits currently held, counting callers that have been admitted but are still
+    /// setting up. This is the honest measure of how committed the resource is; a count
+    /// of established connections misses in-flight attempts and reports phantom capacity.
+    /// </summary>
+    public int EnteredCount
+    {
+        get
+        {
+            lock (_lock) return _enteredCount;
+        }
+    }
+
     public PrioritizedSemaphore(int initialAllowed, int maxAllowed, SemaphorePriorityOdds? priorityOdds = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(initialAllowed);
