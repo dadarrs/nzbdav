@@ -2,6 +2,36 @@
   <img width="1101" height="238" alt="image" src="https://github.com/user-attachments/assets/b14165f4-24ff-4abe-8af6-3ca852e781d4" />
 </p>
 
+# About this fork
+
+This is a fork of [**nzbdav-dev/nzbdav**](https://github.com/nzbdav-dev/nzbdav).
+Its goal is to **stay as close to upstream as possible** — the operational
+database schema is never changed, so a `/config` directory can be moved between
+this fork and upstream in either direction — while adding a focused set of
+capabilities on top:
+
+- **STAT pipelining** for much faster article health checks, with an opt-in per
+  provider and the option to spread checks across backup/block accounts.
+- **Background health checks & dynamic repairs** — missing articles hit while
+  streaming trigger an immediate repair, and a reworked Health page lets you
+  browse exactly what was repaired or deleted with deep links into Radarr/Sonarr.
+- **Provider ordering** — drag-and-drop priority within the pooled and backup
+  sections, with cascade fill.
+- **A lot of UI and observability** — an overview dashboard, live log viewer and
+  active-streams widget, paginated queue/history, per-provider usage and data
+  caps, per-import stats, a theme system, and a live-editable `config.json`.
+
+Some of these were built here; others were ported from the community forks
+[qooode/nzbdavex](https://github.com/qooode/nzbdavex) and
+[Pukabyte/nzbdav](https://github.com/Pukabyte/nzbdav). For the full list with
+per-feature attribution, see **[FORK-CHANGELOG.md](FORK-CHANGELOG.md)**.
+
+Images are published to GHCR as `ghcr.io/dadarrs/nzbdav`. The `:latest` tag
+tracks every push to `main`; versioned tags (e.g. `:0.7.0`, `:0.7.x`) mark cut
+releases. Everything below this section is the upstream project documentation.
+
+---
+
 # Nzb Dav
 
 NzbDav is a WebDAV server that allows you to mount and browse NZB documents as a virtual file system without downloading. It's designed to integrate with other media management tools, like Sonarr and Radarr, by providing a SABnzbd-compatible API. With it, you can build an infinite Plex or Jellyfin media library that streams directly from your usenet provider at maxed-out speeds, without using any storage space on your own server.
@@ -31,7 +61,7 @@ The easiest way to get started is by using the official Docker image.
 To try it out, run the following command to pull and run the image with port `3000` exposed:
 
 ```bash
-docker run --rm -it -p 3000:3000 nzbdav/nzbdav:latest
+docker run --rm -it -p 3000:3000 ghcr.io/dadarrs/nzbdav:latest
 ```
 
 And if you would like to persist saved settings, attach a volume at `/config`
@@ -43,7 +73,7 @@ docker run --rm -it \
   -e PUID=1000 \
   -e PGID=1000 \
   -p 3000:3000 \
-  nzbdav/nzbdav:latest
+  ghcr.io/dadarrs/nzbdav:latest
 ```
 After starting the container, be sure to navigate to the Settings page on the UI to finish setting up your usenet connection settings.
 

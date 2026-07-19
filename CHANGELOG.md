@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/Dadarrs/nzbdav/releases/tag/v0.7.0) (2026-07-19)
+
+First versioned release of the **Dadarrs/nzbdav** fork. It stays close to upstream
+[nzbdav-dev/nzbdav](https://github.com/nzbdav-dev/nzbdav) (the operational database
+schema is unchanged, so `/config` swaps with upstream in either direction) while
+adding STAT pipelining, background health checks & repairs, drag-and-drop provider
+ordering, and a large amount of UI and observability.
+
+See [FORK-CHANGELOG.md](FORK-CHANGELOG.md) for the full list of differences from
+upstream, with per-feature attribution (fork-built vs ported from qooode/nzbdavex or
+Pukabyte/nzbdav).
+
 ## [0.6.4](https://github.com/nzbdav-dev/nzbdav/compare/v0.6.3...v0.6.4) (2026-04-08)
 
 
