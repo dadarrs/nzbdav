@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Config;
@@ -240,11 +241,10 @@ public class GetOverviewStatsController(
             Heatmap = heatmap,
             Latency = latency,
             Errors = errors,
-            // This tree has no indexer infrastructure (no IndexerName column on history
-            // items and no IndexerApiHits tracking), so the indexer panels always
-            // receive empty collections. The response shape is kept so the frontend
-            // can hide the panels when they are empty.
-            Indexers = new List<GetOverviewStatsResponse.IndexerRow>(),
+            // Per-indexer success/failure comes from ImportStats joined to ImportOrigins
+            // (the indexer that supplied each NZB). API-hit-limit tracking isn't wired in
+            // this tree, so that panel stays empty and the frontend hides it.
+            Indexers = await BuildIndexersAsync(metrics, windowStart).ConfigureAwait(false),
             IndexerApiUsage = new List<GetOverviewStatsResponse.IndexerApiUsageRow>(),
             Lifetime = lifetime,
             Records = records,
@@ -795,5 +795,92 @@ public class GetOverviewStatsController(
             BestHourBytes = hourRow?.Bytes ?? 0,
             BestHourAt = hourRow?.Hour,
         };
+    }
+
+    // How many indexer rows to return before collapsing the tail. Real setups have a
+    // handful of indexers; the cap is just a runaway guard.
+    private const int MaxIndexerRows = 50;
+
+    /// <summary>
+    /// Per-indexer completed/failed tallies for the window, grouped by the effective
+    /// indexer name (resolved arr indexer, else the download-URL host, else "Unknown").
+    /// Inner-joins ImportStats to ImportOrigins so only tracked imports count — imports
+    /// from before this feature existed simply don't appear.
+    /// </summary>
+    private static async Task<List<GetOverviewStatsResponse.IndexerRow>> BuildIndexersAsync(
+        MetricsDbContext metrics, long windowStart)
+    {
+        var rows = await (
+            from s in metrics.ImportStats
+            join o in metrics.ImportOrigins on s.Id equals o.Id
+            where s.CompletedAt >= windowStart
+            select new { s.Failed, s.TotalMs, s.ProviderBytesJson, o.ArrIndexer, o.UrlHost }
+        ).ToListAsync().ConfigureAwait(false);
+
+        var groups = new Dictionary<string, IndexerAccumulator>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            var name = !string.IsNullOrWhiteSpace(r.ArrIndexer) ? r.ArrIndexer!
+                : !string.IsNullOrWhiteSpace(r.UrlHost) ? r.UrlHost!
+                : "Unknown";
+            if (!groups.TryGetValue(name, out var acc))
+                groups[name] = acc = new IndexerAccumulator();
+
+            acc.Total++;
+            acc.SumTotalMs += r.TotalMs;
+            if (r.Failed)
+            {
+                acc.Failed++;
+            }
+            else
+            {
+                acc.Completed++;
+                acc.BytesCompleted += SumProviderBytes(r.ProviderBytesJson);
+            }
+        }
+
+        return groups
+            .Select(kv => new GetOverviewStatsResponse.IndexerRow
+            {
+                Name = kv.Key,
+                Completed = kv.Value.Completed,
+                Failed = kv.Value.Failed,
+                BytesCompleted = kv.Value.BytesCompleted,
+                AvgSeconds = kv.Value.Total > 0
+                    ? (int)Math.Round(kv.Value.SumTotalMs / 1000.0 / kv.Value.Total)
+                    : 0,
+                SuccessRate = kv.Value.Total > 0
+                    ? (double)kv.Value.Completed / kv.Value.Total
+                    : 0,
+            })
+            .OrderByDescending(r => r.Completed + r.Failed)
+            .ThenByDescending(r => r.BytesCompleted)
+            .Take(MaxIndexerRows)
+            .ToList();
+    }
+
+    private sealed class IndexerAccumulator
+    {
+        public long Completed, Failed, Total, BytesCompleted;
+        public long SumTotalMs;
+    }
+
+    private sealed record ProviderBytesRow(long DownloadBytes, long VerifyBytes);
+
+    private static long SumProviderBytes(string? json)
+    {
+        if (string.IsNullOrEmpty(json) || json == "[]") return 0;
+        try
+        {
+            var entries = JsonSerializer.Deserialize<List<ProviderBytesRow>>(json);
+            if (entries == null) return 0;
+            long sum = 0;
+            foreach (var e in entries) sum += e.DownloadBytes + e.VerifyBytes;
+            return sum;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 }

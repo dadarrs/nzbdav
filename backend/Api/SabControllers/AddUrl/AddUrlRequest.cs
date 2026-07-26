@@ -25,7 +25,8 @@ public class AddUrlRequest() : AddFileRequest
             Category = context.GetRequestParam("cat") ?? configManager.GetManualUploadCategory(),
             Priority = MapPriorityOption(context.GetRequestParam("priority")),
             PostProcessing = MapPostProcessingOption(context.GetRequestParam("pp")),
-            CancellationToken = context.RequestAborted
+            CancellationToken = context.RequestAborted,
+            SourceUrl = nzbUrl,
         };
     }
 

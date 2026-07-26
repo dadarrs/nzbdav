@@ -45,15 +45,22 @@ public class GetHistoryController(
         var davItemsDict = davItems
             .ToDictionary(x => x.Id, x => x);
 
+        // join in the indexer origin (metrics store; keyed by the shared item id)
+        var indexerByItemId = await GetIndexersByItemIdAsync(
+            historyItems.Select(x => x.Id), request.CancellationToken).ConfigureAwait(false);
+
         // get slots
         var slots = historyItems
             .Select(x =>
-                GetHistoryResponse.HistorySlot.FromHistoryItem(
+            {
+                var slot = GetHistoryResponse.HistorySlot.FromHistoryItem(
                     x,
                     x.DownloadDirId != null ? davItemsDict.GetValueOrDefault(x.DownloadDirId.Value) : null,
                     configManager
-                )
-            )
+                );
+                slot.Indexer = indexerByItemId.GetValueOrDefault(x.Id);
+                return slot;
+            })
             .ToList();
 
         // return response
@@ -65,6 +72,35 @@ public class GetHistoryController(
                 TotalCount = totalCount,
             }
         };
+    }
+
+    /// <summary>
+    /// Maps item ids to their effective indexer name (resolved arr indexer, else the
+    /// download-URL host) from the metrics store. Items with no origin, or an origin
+    /// carrying neither, are simply absent — the slot then has no indexer badge.
+    /// </summary>
+    private static async Task<Dictionary<Guid, string>> GetIndexersByItemIdAsync(
+        IEnumerable<Guid> itemIds, CancellationToken ct)
+    {
+        var ids = itemIds.ToHashSet();
+        if (ids.Count == 0) return new Dictionary<Guid, string>();
+
+        await using var metrics = new MetricsDbContext();
+        var origins = await metrics.ImportOrigins
+            .Where(o => ids.Contains(o.Id))
+            .Select(o => new { o.Id, o.ArrIndexer, o.UrlHost })
+            .ToListAsync(ct).ConfigureAwait(false);
+
+        var result = new Dictionary<Guid, string>();
+        foreach (var o in origins)
+        {
+            var name = !string.IsNullOrWhiteSpace(o.ArrIndexer) ? o.ArrIndexer
+                : !string.IsNullOrWhiteSpace(o.UrlHost) ? o.UrlHost
+                : null;
+            if (name != null) result[o.Id] = name;
+        }
+
+        return result;
     }
 
     protected override async Task<IActionResult> Handle()

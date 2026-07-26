@@ -51,6 +51,11 @@ public class GetHistoryResponse : SabBaseResponse
         [JsonPropertyName("nzb_blob_id")]
         public string? NzbBlobId { get; set; }
 
+        // The indexer that supplied this NZB (resolved arr name, else download-URL host).
+        // Null until known; joined in from the metrics store, not the frozen main DB.
+        [JsonPropertyName("indexer")]
+        public string? Indexer { get; set; }
+
         public static HistorySlot FromHistoryItem
         (
             HistoryItem historyItem,

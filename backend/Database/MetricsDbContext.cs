@@ -36,6 +36,7 @@ public sealed class MetricsDbContext() : DbContext(Options.Value)
     public DbSet<CatalogueDaily> CatalogueDaily => Set<CatalogueDaily>();
     public DbSet<RepairEvent> RepairEvents => Set<RepairEvent>();
     public DbSet<ImportStat> ImportStats => Set<ImportStat>();
+    public DbSet<ImportOrigin> ImportOrigins => Set<ImportOrigin>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -192,6 +193,23 @@ public sealed class MetricsDbContext() : DbContext(Options.Value)
             e.Property(x => x.ProviderBytesJson).IsRequired();
 
             e.HasIndex(x => x.CompletedAt);
+        });
+
+        b.Entity<ImportOrigin>(e =>
+        {
+            e.ToTable("ImportOrigins");
+            e.HasKey(x => x.Id);
+
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.UrlHost).HasMaxLength(255);
+            e.Property(x => x.ArrIndexer).HasMaxLength(255);
+            e.Property(x => x.Resolved).IsRequired();
+            e.Property(x => x.CreatedAt).IsRequired();
+
+            e.Ignore(x => x.EffectiveName);
+
+            // the backfill sweep scans unresolved rows within a recent window
+            e.HasIndex(x => new { x.Resolved, x.CreatedAt });
         });
     }
 }

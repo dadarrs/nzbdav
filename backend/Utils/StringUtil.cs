@@ -6,4 +6,9 @@ public static class StringUtil
     {
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
+
+    public static string TruncateToLength(string value, int maxLength)
+    {
+        return value.Length <= maxLength ? value : value[..maxLength];
+    }
 }

@@ -57,6 +57,11 @@ public class GetQueueResponse : SabBaseResponse
         [JsonPropertyName("mbleft")]
         public string SizeLeftInMB { get; init; }
 
+        // The indexer that supplied this NZB (resolved arr name, else download-URL host).
+        // Joined in from the metrics store; may be null for an item still being resolved.
+        [JsonPropertyName("indexer")]
+        public string? Indexer { get; set; }
+
         public static QueueSlot FromQueueItem
         (
             QueueItem queueItem,

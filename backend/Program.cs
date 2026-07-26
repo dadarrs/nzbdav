@@ -132,6 +132,7 @@ class Program
             .AddSingleton<QueueManager>()
             .AddHostedService<HealthCheckService>()
             .AddHostedService<ArrMonitoringService>()
+            .AddHostedService<IndexerResolutionService>()
             .AddHostedService<BlobCleanupService>()
             .AddHostedService<NzbBlobCleanupService>()
             .AddHostedService<HistoryCleanupService>()

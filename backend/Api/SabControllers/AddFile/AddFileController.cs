@@ -5,10 +5,12 @@ using NzbWebDAV.Api.SabControllers.GetQueue;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
+using NzbWebDAV.Database.Models.Metrics;
 using NzbWebDAV.Extensions;
 using NzbWebDAV.Queue;
 using NzbWebDAV.Utils;
 using NzbWebDAV.Websocket;
+using Serilog;
 
 namespace NzbWebDAV.Api.SabControllers.AddFile;
 
@@ -88,6 +90,10 @@ public class AddFileController(
             throw;
         }
 
+        // record where this NZB came from (indexer origin), keyed by the shared id.
+        // Best-effort: a metrics hiccup must never fail an otherwise-successful add.
+        await WriteImportOriginAsync(id, request.SourceUrl).ConfigureAwait(false);
+
         // inform the frontend that a new item was added to the queue
         var message = GetQueueResponse.QueueSlot.FromQueueItem(queueItem).ToJson();
         _ = websocketManager.SendMessage(WebsocketTopic.QueueItemAdded, message);
@@ -107,6 +113,27 @@ public class AddFileController(
     {
         var request = await AddFileRequest.New(httpContext, configManager).ConfigureAwait(false);
         return Ok(await AddFileAsync(request).ConfigureAwait(false));
+    }
+
+    private static async Task WriteImportOriginAsync(Guid id, string? sourceUrl)
+    {
+        try
+        {
+            await using var metrics = new MetricsDbContext();
+            metrics.ImportOrigins.Add(new ImportOrigin
+            {
+                Id = id,
+                UrlHost = IndexerUtil.HostFromUrl(sourceUrl),
+                ArrIndexer = null,
+                Resolved = false,
+                CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            });
+            await metrics.SaveChangesAsync().ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            Log.Warning(e, "Failed to record import origin for {Id}", id);
+        }
     }
 
     private static async Task BackupNzbAsync(Guid id, string fileName, string category, string backupLocation)

@@ -16,6 +16,10 @@ public class AddFileRequest()
     public DateTime? PauseUntil { get; init; }
     public CancellationToken CancellationToken { get; init; }
 
+    // The URL the NZB was fetched from (addurl path only; null for direct uploads).
+    // Only its host is persisted, as the indexer-origin fallback — see IndexerUtil.
+    public string? SourceUrl { get; init; }
+
     public static async Task<AddFileRequest> New(HttpContext context, ConfigManager configManager)
     {
         var file =
