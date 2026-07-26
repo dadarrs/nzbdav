@@ -220,6 +220,7 @@ export const QueueRow = memo(({ slot, onIsSelectedChanged, onIsRemovingChanged, 
                 isRemoving={!!slot.isRemoving}
                 name={slot.filename}
                 category={slot.cat}
+                indexer={slot.indexer}
                 status={slot.status}
                 percentage={slot.true_percentage}
                 fileSizeBytes={Number(slot.mb) * 1024 * 1024}

@@ -6,6 +6,7 @@ import { Truncate } from "../truncate/truncate";
 import { StatusBadge } from "../status-badge/status-badge";
 import { formatFileSize } from "~/utils/file-size";
 import { classNames } from "~/utils/styling";
+import { shortenIndexer } from "~/utils/indexer";
 
 export type PageTableProps = {
     children?: ReactNode,
@@ -26,6 +27,7 @@ export function PageTable({ children, headerCheckboxState, onHeaderCheckboxChang
                             </TriCheckbox>
                         </th>
                         <th className={styles.desktop}>Category</th>
+                        <th className={styles.desktop}>Indexer</th>
                         <th className={styles.desktop}>Status</th>
                         <th className={styles.desktop}>Size</th>
                         <th>Actions</th>
@@ -48,6 +50,7 @@ export type PageRowProps = {
     isRemoving: boolean,
     name: string,
     category: string,
+    indexer?: string | null,
     status: string,
     percentage?: string,
     error?: string,
@@ -77,6 +80,7 @@ export function PageRow(props: PageRowProps) {
                             <StatusBadge status={props.status} percentage={props.percentage} error={props.error}
                                 errorTooltip={!props.onRowClick} />
                             <CategoryBadge category={props.category} />
+                            {props.indexer && <IndexerBadge indexer={props.indexer} />}
                         </div>
                         <div>{formatFileSize(props.fileSizeBytes)}</div>
                     </div>
@@ -84,6 +88,9 @@ export function PageRow(props: PageRowProps) {
             </td>
             <td className={styles.desktop}>
                 <CategoryBadge category={props.category} />
+            </td>
+            <td className={styles.desktop}>
+                <IndexerBadge indexer={props.indexer} />
             </td>
             <td className={styles.desktop}>
                 <StatusBadge status={props.status} percentage={props.percentage} error={props.error}
@@ -107,4 +114,10 @@ export function CategoryBadge({ category }: { category: string }) {
     if (categoryLower === 'movies') variant = 'primary';
     if (categoryLower === 'tv') variant = 'info';
     return <Badge bg={variant} style={{ width: '85px' }}>{categoryLower}</Badge>
+}
+
+export function IndexerBadge({ indexer }: { indexer?: string | null }) {
+    const short = shortenIndexer(indexer);
+    if (!short) return <span className={styles.indexerEmpty}>—</span>;
+    return <span className={styles.indexerBadge} title={indexer ?? undefined}>{short}</span>;
 }

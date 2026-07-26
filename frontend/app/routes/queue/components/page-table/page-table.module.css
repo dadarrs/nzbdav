@@ -111,9 +111,32 @@
 
 .badges {
     display: flex;
+    align-items: center;
+    flex-wrap: wrap;
     margin-top: 3px;
     margin-bottom: 5px;
     gap: 10px;
+}
+
+.indexerBadge {
+    display: inline-block;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    font-size: 0.78em;
+    line-height: 1.4;
+    color: var(--text-muted);
+    background: var(--bg-surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 2px 9px;
+}
+
+.indexerEmpty {
+    color: var(--text-muted);
+    opacity: 0.4;
 }
 
 .actions {

@@ -295,6 +295,7 @@ export type QueueSlot = {
     status: string,
     mb: string,
     mbleft: string,
+    indexer?: string | null,
 }
 
 export type HistoryResponse = {
@@ -313,6 +314,7 @@ export type HistorySlot = {
     download_time: number,
     fail_message: string,
     nzb_blob_id?: string,
+    indexer?: string | null,
 }
 
 export type DirectoryItem = {

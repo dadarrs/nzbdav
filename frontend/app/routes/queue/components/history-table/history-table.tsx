@@ -218,6 +218,7 @@ export function HistoryRow({ slot, onIsSelectedChanged, onIsRemovingChanged, onR
                 isRemoving={!!slot.isRemoving}
                 name={slot.name}
                 category={slot.category}
+                indexer={slot.indexer}
                 status={slot.status}
                 error={slot.fail_message}
                 fileSizeBytes={slot.bytes}
@@ -225,7 +226,7 @@ export function HistoryRow({ slot, onIsSelectedChanged, onIsRemovingChanged, onR
                 onRowSelectionChanged={isSelected => onIsSelectedChanged(slot.nzo_id, isSelected)}
                 onRowClick={() => setShowStats(x => !x)}
             />
-            {showStats && <ImportStatsRow nzoId={slot.nzo_id} colSpan={5} failMessage={slot.fail_message} />}
+            {showStats && <ImportStatsRow nzoId={slot.nzo_id} colSpan={6} failMessage={slot.fail_message} />}
             <ConfirmModal
                 show={isConfirmingRemoval}
                 title="Remove From History?"
