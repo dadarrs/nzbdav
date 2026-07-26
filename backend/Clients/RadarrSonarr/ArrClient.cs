@@ -45,6 +45,13 @@ public class ArrClient(string host, string apiKey)
     public Task<ArrQueue<ArrQueueRecord>> GetQueueAsync() =>
         Get<ArrQueue<ArrQueueRecord>>($"/queue?protocol=usenet&pageSize=5000");
 
+    // Grabbed-history events (eventType=1), newest first. Carries downloadId -> indexer
+    // and, unlike the queue, persists after the download completes — so it's the reliable
+    // source for resolving an import's indexer. Paged; the caller stops at its lookback.
+    public Task<ArrHistoryResponse> GetGrabbedHistoryAsync(int page, int pageSize) =>
+        Get<ArrHistoryResponse>(
+            $"/history?eventType=1&page={page}&pageSize={pageSize}&sortKey=date&sortDirection=descending");
+
     public async Task<int> GetQueueCountAsync() =>
         (await Get<ArrQueue<ArrQueueRecord>>($"/queue?pageSize=1")).TotalRecords;
 

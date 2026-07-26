@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
+using NzbWebDAV.Clients.RadarrSonarr;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Utils;
@@ -10,15 +11,19 @@ namespace NzbWebDAV.Services;
 /// <summary>
 /// Backfills the true indexer name onto import-origin rows. Each NZB is recorded at
 /// add-time with only the download-URL host (which, behind Prowlarr/NZBHydra, is just
-/// the proxy). The real indexer is known to Radarr/Sonarr, which expose it on their
-/// queue records keyed by downloadId — and that downloadId is the same Guid the import
-/// carries. So this sweep periodically reads each arr's usenet queue, builds a
-/// downloadId → indexer map, and stamps the matching unresolved origins.
+/// the proxy — and for arr grabs, added via addfile, there's no URL at all). The real
+/// indexer is known to Radarr/Sonarr, keyed by downloadId — the same Guid the import
+/// carries. So this sweep reads each arr and builds a downloadId → indexer map, then
+/// stamps the matching unresolved origins.
 ///
-/// Best-effort by nature: an arr keeps a record only while the download is in its queue,
-/// so a small fraction of very fast imports can age out before a sweep sees them and
-/// keep their URL-host fallback. Rows drop out of the sweep window on their own once
-/// they're older than <see cref="LookbackWindow"/>, so the scan set stays bounded.
+/// The map is built from two sources: the live queue AND grabbed history. History is
+/// the source that actually works — nzbdav verifies+mounts in seconds, so an import
+/// leaves the arr queue almost immediately, but its grabbed-history event is written at
+/// grab time and persists. A queue-only sweep only ever catches the rare import still
+/// sitting in the queue during a tick; history catches all of them.
+///
+/// Rows drop out of the sweep window on their own once they're older than
+/// <see cref="LookbackWindow"/>, so the scan set (and the history paging) stays bounded.
 /// </summary>
 public class IndexerResolutionService(ConfigManager configManager) : BackgroundService
 {
@@ -54,7 +59,9 @@ public class IndexerResolutionService(ConfigManager configManager) : BackgroundS
             .ToListAsync(ct).ConfigureAwait(false);
         if (pending.Count == 0) return;
 
-        // build downloadId -> indexer across every arr queue (best-effort per instance)
+        // build downloadId -> indexer across every arr, from the live queue AND grabbed
+        // history (best-effort per instance). History is the reliable source; the queue
+        // read is a cheap fast-path for imports still in flight.
         var indexerByDownloadId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var client in arrConfig.GetArrClients())
         {
@@ -71,6 +78,15 @@ public class IndexerResolutionService(ConfigManager configManager) : BackgroundS
             catch (Exception e)
             {
                 Log.Debug($"Indexer resolution: could not read queue from `{client.Host}`: {e.Message}");
+            }
+
+            try
+            {
+                await AddGrabbedHistoryAsync(client, indexerByDownloadId, cutoff, ct).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                Log.Debug($"Indexer resolution: could not read history from `{client.Host}`: {e.Message}");
             }
         }
 
@@ -89,6 +105,44 @@ public class IndexerResolutionService(ConfigManager configManager) : BackgroundS
         {
             await metrics.SaveChangesAsync(ct).ConfigureAwait(false);
             Log.Debug($"Indexer resolution: stamped {changed} import(s) with their arr indexer.");
+        }
+    }
+
+    /// <summary>
+    /// Pages back through an arr's grabbed history (newest first) folding downloadId →
+    /// indexer into <paramref name="map"/>, and stops as soon as it reaches records older
+    /// than the lookback cutoff (history is date-descending) or a hard page cap. Bounded so
+    /// a busy arr can never make a sweep unbounded.
+    /// </summary>
+    private static async Task AddGrabbedHistoryAsync(
+        ArrClient client, IDictionary<string, string> map, long cutoff, CancellationToken ct)
+    {
+        const int pageSize = 200;
+        const int maxPages = 10;
+        for (var page = 1; page <= maxPages; page++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var history = await client.GetGrabbedHistoryAsync(page, pageSize).ConfigureAwait(false);
+            if (history.Records.Count == 0) break;
+
+            var reachedWindowEnd = false;
+            foreach (var record in history.Records)
+            {
+                if (record.Date.ToUnixTimeMilliseconds() < cutoff)
+                {
+                    reachedWindowEnd = true;
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(record.DownloadId)) continue;
+                var indexer = record.EffectiveIndexer;
+                if (string.IsNullOrWhiteSpace(indexer)) continue;
+                map.TryAdd(record.DownloadId, indexer.Trim());
+            }
+
+            // records are date-descending: once we've crossed the cutoff, or this page
+            // wasn't full, nothing older is worth fetching.
+            if (reachedWindowEnd || history.Records.Count < pageSize) break;
         }
     }
 }
