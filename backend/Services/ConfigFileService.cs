@@ -83,6 +83,7 @@ public class ConfigFileService(ConfigManager configManager) : BackgroundService
             "api.ensure-article-existence-categories",
             "usenet.nntp-pipelining.enabled",
             "usenet.nntp-pipelining.depth",
+            "usenet.health-check-concurrency",
             "api.backup-providers-for-health-checks",
             "api.backup-providers-for-background-health-checks",
         ]),

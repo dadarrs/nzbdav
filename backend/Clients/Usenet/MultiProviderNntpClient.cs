@@ -89,6 +89,12 @@ public class MultiProviderNntpClient(
             {
                 subResults = await provider.StatPipelinedAsync(subBatch, cancellationToken).ConfigureAwait(false);
             }
+            catch (Exception e) when (e.IsFileDescriptorExhaustion())
+            {
+                // This is a local process/host resource failure, not a provider failure.
+                // Trying every configured provider would only multiply failed socket allocations.
+                throw;
+            }
             catch (Exception e) when (!e.IsCancellationException())
             {
                 // The whole sub-batch is unresolved on this provider; leave those segments pending
@@ -300,6 +306,10 @@ public class MultiProviderNntpClient(
                 }
 
                 return WrapCounting(result, provider.Name);
+            }
+            catch (Exception e) when (e.IsFileDescriptorExhaustion())
+            {
+                throw;
             }
             catch (Exception e) when (!e.IsCancellationException())
             {

@@ -65,8 +65,7 @@ public class HealthCheckService : BackgroundService
                 // block quotas that on-add checks barely touch).
                 var useBackupProviders = _configManager.UseBackupProvidersForHealthChecks()
                                          && _configManager.UseBackupProvidersForBackgroundHealthChecks();
-                var concurrency = _configManager.GetUsenetProviderConfig()
-                    .TotalStatCheckConnections(useBackupProviders);
+                var concurrency = _configManager.GetHealthCheckConcurrency(useBackupProviders);
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
 
                 // mark this token's work as a background health check so the provider fan-out

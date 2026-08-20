@@ -15,6 +15,12 @@ namespace NzbWebDAV.Clients.Usenet;
 
 public class UsenetStreamingClient : WrappingNntpClient
 {
+    // Opening every configured provider connection at once makes transient DNS/network
+    // failures produce a large burst of short-lived sockets. Pools still reach their full
+    // configured size; this only bounds how many connection handshakes happen simultaneously.
+    private const int MaxConcurrentConnectionAttempts = 16;
+    private static readonly SemaphoreSlim ConnectionAttemptGate = new(MaxConcurrentConnectionAttempts);
+
     private readonly ConfigManager _configManager;
 
     public UsenetStreamingClient(
@@ -54,6 +60,7 @@ public class UsenetStreamingClient : WrappingNntpClient
         CancellationToken cancellationToken
     )
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(concurrency, 1);
         // Stay on the original one-at-a-time path unless pipelining is switched on AND at least one
         // health-check-eligible provider has actually opted in -- so enabling the master switch
         // alone changes nothing until a provider is tested and enabled.
@@ -85,24 +92,57 @@ public class UsenetStreamingClient : WrappingNntpClient
         // Check the segments in pipelined batches of `depth`, running up to `concurrency` batches at
         // once so every pooled connection stays busy. Depth is the user-facing lever: a deeper
         // pipeline hides more round-trip latency; if a provider handles deep batches poorly, lower it.
-        var batches = ids.Chunk(depth);
-        var tasks = batches
-            .Select(async batch => (
-                Batch: batch,
-                Results: await StatPipelinedAsync(batch, token).ConfigureAwait(false)
-            ))
-            .WithConcurrencyAsync(concurrency);
-
         var processed = 0;
-        await foreach (var task in tasks.ConfigureAwait(false))
+        var running = new HashSet<Task<(string[] Batch, IReadOnlyList<UsenetStatResponse> Results)>>();
+        using var batches = ids.Chunk(depth).GetEnumerator();
+
+        void FillPipeline()
         {
-            for (var i = 0; i < task.Batch.Length; i++)
+            while (running.Count < concurrency && batches.MoveNext())
+                running.Add(CheckBatchAsync(batches.Current));
+        }
+
+        async Task<(string[] Batch, IReadOnlyList<UsenetStatResponse> Results)> CheckBatchAsync(string[] batch)
+        {
+            var results = await StatPipelinedAsync(batch, token).ConfigureAwait(false);
+            return (batch, results);
+        }
+
+        try
+        {
+            FillPipeline();
+            while (running.Count > 0)
             {
-                progress?.Report(++processed);
-                if (task.Results[i].ResponseType == UsenetResponseType.ArticleExists) continue;
-                await childCt.CancelAsync().ConfigureAwait(false);
-                throw new UsenetArticleNotFoundException(task.Batch[i]);
+                var completed = await Task.WhenAny(running).ConfigureAwait(false);
+                running.Remove(completed);
+                var task = await completed.ConfigureAwait(false);
+
+                for (var i = 0; i < task.Batch.Length; i++)
+                {
+                    progress?.Report(++processed);
+                    if (task.Results[i].ResponseType == UsenetResponseType.ArticleExists) continue;
+                    throw new UsenetArticleNotFoundException(task.Batch[i]);
+                }
+
+                FillPipeline();
             }
+        }
+        catch
+        {
+            // Stop and observe every sibling batch before returning. Without this, a failed
+            // batch leaves up to `concurrency - 1` unobserved tasks reconnecting in the
+            // background while HealthCheckService starts another attempt five seconds later.
+            await childCt.CancelAsync().ConfigureAwait(false);
+            try
+            {
+                await Task.WhenAll(running).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Preserve the exception that caused cancellation; sibling failures are expected.
+            }
+
+            throw;
         }
 
         LogCompleted("PIPELINED", ids.Count, stopwatch);
@@ -233,18 +273,38 @@ public class UsenetStreamingClient : WrappingNntpClient
     )
     {
         var connection = new BaseNntpClient();
-        // global timeout knobs (usenet.timeouts.*), file-editable via config.json
-        if (configManager != null)
-            connection.CommandTimeout = configManager.GetNntpCommandTimeout();
-        connection.TlsHandshakeTimeout = configManager?.GetNntpTlsHandshakeTimeout();
-        connection.StatPipelineIdleTimeout = configManager?.GetNntpStatPipelineIdleTimeout();
-        var host = connectionDetails.Host;
-        var port = connectionDetails.Port;
-        var useSsl = connectionDetails.UseSsl;
-        var user = connectionDetails.User;
-        var pass = connectionDetails.Pass;
-        await connection.ConnectAsync(host, port, useSsl, ct).ConfigureAwait(false);
-        await connection.AuthenticateAsync(user, pass, ct).ConfigureAwait(false);
-        return connection;
+        try
+        {
+            // global timeout knobs (usenet.timeouts.*), file-editable via config.json
+            if (configManager != null)
+                connection.CommandTimeout = configManager.GetNntpCommandTimeout();
+            connection.TlsHandshakeTimeout = configManager?.GetNntpTlsHandshakeTimeout();
+            connection.StatPipelineIdleTimeout = configManager?.GetNntpStatPipelineIdleTimeout();
+            var host = connectionDetails.Host;
+            var port = connectionDetails.Port;
+            var useSsl = connectionDetails.UseSsl;
+            var user = connectionDetails.User;
+            var pass = connectionDetails.Pass;
+
+            await ConnectionAttemptGate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await connection.ConnectAsync(host, port, useSsl, ct).ConfigureAwait(false);
+                await connection.AuthenticateAsync(user, pass, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                ConnectionAttemptGate.Release();
+            }
+
+            return connection;
+        }
+        catch
+        {
+            // The pool cannot dispose a factory result that was never returned. Dispose here
+            // so failed TCP/TLS/authentication attempts release their socket immediately.
+            connection.Dispose();
+            throw;
+        }
     }
 }

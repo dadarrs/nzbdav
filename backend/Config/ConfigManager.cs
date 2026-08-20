@@ -167,6 +167,22 @@ public class ConfigManager
         );
     }
 
+    /// <summary>
+    /// Health checks need enough parallelism to hide NNTP latency, but using the sum of every
+    /// provider's connection allowance can turn one network fault into hundreds of simultaneous
+    /// reconnects. Keep a separate, configurable ceiling; pipelining still provides high STAT
+    /// throughput at the conservative default.
+    /// </summary>
+    public int GetHealthCheckConcurrency(bool useBackupProviders)
+    {
+        var available = GetUsenetProviderConfig().TotalStatCheckConnections(useBackupProviders);
+        if (available <= 1) return 1;
+
+        var configured = StringUtil.EmptyToNull(GetConfigValue("usenet.health-check-concurrency"));
+        var requested = configured != null ? int.Parse(configured) : Math.Min(available, 32);
+        return Math.Clamp(requested, 1, available);
+    }
+
     public int GetArticleBufferSize()
     {
         return int.Parse(

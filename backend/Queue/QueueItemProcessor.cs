@@ -172,9 +172,8 @@ public class QueueItemProcessor(
             var part3Progress = progress
                 .Offset(100)
                 .ToPercentage(articlesToCheck.Count);
-            var healthCheckConcurrency = configManager
-                .GetUsenetProviderConfig()
-                .TotalStatCheckConnections(configManager.UseBackupProvidersForHealthChecks());
+            var healthCheckConcurrency = configManager.GetHealthCheckConcurrency(
+                configManager.UseBackupProvidersForHealthChecks());
             await usenetClient
                 .CheckAllSegmentsAsync(articlesToCheck, healthCheckConcurrency, part3Progress, ct)
                 .ConfigureAwait(false);

@@ -25,6 +25,8 @@ public class ProviderCircuitBreaker
     private int _consecutiveFailures;
     private long _trippedUntilMs;
     private TimeSpan _currentCooldown = InitialCooldown;
+    private long _generation;
+    private bool _probeInProgress;
 
     public ProviderCircuitBreaker(string providerName)
     {
@@ -35,29 +37,57 @@ public class ProviderCircuitBreaker
     {
         get
         {
-            var trippedUntil = Volatile.Read(ref _trippedUntilMs);
-            if (trippedUntil == 0) return false;
-            return Environment.TickCount64 < trippedUntil;
+            lock (_lock)
+            {
+                if (_trippedUntilMs == 0) return false;
+                return Environment.TickCount64 < _trippedUntilMs || _probeInProgress;
+            }
         }
     }
 
-    public void RecordSuccess()
+    /// <summary>
+    /// Admits normal work while closed. Once the cooldown has elapsed, exactly one caller
+    /// is admitted as a half-open probe; all others must use another provider.
+    /// </summary>
+    public bool TryEnter(out long generation)
     {
         lock (_lock)
         {
+            generation = _generation;
+            if (_trippedUntilMs == 0) return true;
+            if (Environment.TickCount64 < _trippedUntilMs || _probeInProgress) return false;
+
+            _probeInProgress = true;
+            return true;
+        }
+    }
+
+    public void RecordSuccess(long generation)
+    {
+        lock (_lock)
+        {
+            // Ignore stale operations admitted before a newer failure wave tripped the breaker.
+            if (generation != _generation) return;
+
             if (_consecutiveFailures > 0 || _trippedUntilMs > 0)
                 Log.Information("Provider {Provider} recovered — circuit breaker reset.", _providerName);
 
             _consecutiveFailures = 0;
             _trippedUntilMs = 0;
             _currentCooldown = InitialCooldown;
+            _probeInProgress = false;
         }
     }
 
-    public void RecordFailure()
+    public void RecordFailure(long generation)
     {
         lock (_lock)
         {
+            // Once one operation trips the breaker, the rest of that already-admitted wave
+            // must not repeatedly re-trip it, extend cooldown, or overwrite the probe state.
+            if (generation != _generation) return;
+
+            _probeInProgress = false;
             _consecutiveFailures++;
 
             if (_consecutiveFailures < FailureThreshold) return;
@@ -70,6 +100,17 @@ public class ProviderCircuitBreaker
 
             _currentCooldown = TimeSpan.FromMilliseconds(
                 Math.Min(_currentCooldown.TotalMilliseconds * 2, MaxCooldown.TotalMilliseconds));
+            _generation++;
+        }
+    }
+
+    /// <summary>Releases a half-open probe admission that was cancelled by its caller.</summary>
+    public void RecordCancellation(long generation)
+    {
+        lock (_lock)
+        {
+            if (generation == _generation)
+                _probeInProgress = false;
         }
     }
 }

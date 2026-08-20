@@ -83,6 +83,9 @@ public class MultiConnectionNntpClient(
         var retryCount = 1;
         while (true)
         {
+            if (!circuitBreaker.TryEnter(out var breakerGeneration))
+                throw new ProviderCircuitOpenException(providerName);
+
             ConnectionLock<INntpClient>? connectionLock = null;
             try
             {
@@ -91,12 +94,21 @@ public class MultiConnectionNntpClient(
             }
             catch (Exception e) when (e.IsCancellationException())
             {
+                circuitBreaker.RecordCancellation(breakerGeneration);
                 LogException(() => connectionLock?.Dispose());
+                throw;
+            }
+            catch (Exception e) when (e.IsFileDescriptorExhaustion())
+            {
+                circuitBreaker.RecordCancellation(breakerGeneration);
+                Log.Error(e,
+                    "File-descriptor exhaustion while connecting to provider {Provider}; suppressing retries.",
+                    providerName);
                 throw;
             }
             catch (Exception e)
             {
-                circuitBreaker.RecordFailure();
+                circuitBreaker.RecordFailure(breakerGeneration);
                 LogException(() => connectionLock?.Replace());
                 LogException(() => connectionLock?.Dispose());
                 if (retryCount-- > 0)
@@ -129,12 +141,13 @@ public class MultiConnectionNntpClient(
                     results = linear;
                 }
 
-                circuitBreaker.RecordSuccess();
+                circuitBreaker.RecordSuccess(breakerGeneration);
                 LogException(() => connectionLock?.Dispose());
                 return results;
             }
             catch (Exception e) when (e.IsCancellationException())
             {
+                circuitBreaker.RecordCancellation(breakerGeneration);
                 // A cancelled batch (e.g. CheckAllSegmentsAsync failing fast on a missing article)
                 // may have written commands with responses still unread, leaving the stream desynced
                 // and the connection poisoned. Discard it rather than return it to the pool.
@@ -142,9 +155,19 @@ public class MultiConnectionNntpClient(
                 LogException(() => connectionLock?.Dispose());
                 throw;
             }
+            catch (Exception e) when (e.IsFileDescriptorExhaustion())
+            {
+                circuitBreaker.RecordCancellation(breakerGeneration);
+                LogException(() => connectionLock?.Replace());
+                LogException(() => connectionLock?.Dispose());
+                Log.Error(e,
+                    "File-descriptor exhaustion while using provider {Provider}; suppressing retries.",
+                    providerName);
+                throw;
+            }
             catch (Exception e)
             {
-                circuitBreaker.RecordFailure();
+                circuitBreaker.RecordFailure(breakerGeneration);
                 // A failed pipelined batch leaves the connection's stream in an indeterminate
                 // state, so discard it (Replace) rather than returning it to the pool.
                 LogException(() => connectionLock?.Replace());
@@ -253,6 +276,9 @@ public class MultiConnectionNntpClient(
     {
         while (retryCount >= 0)
         {
+            if (!circuitBreaker.TryEnter(out var breakerGeneration))
+                throw new ProviderCircuitOpenException(providerName);
+
             ConnectionLock<INntpClient>? connectionLock = null;
             try
             {
@@ -260,13 +286,23 @@ public class MultiConnectionNntpClient(
             }
             catch (Exception e) when (e.IsCancellationException())
             {
+                circuitBreaker.RecordCancellation(breakerGeneration);
                 LogException(() => connectionLock?.Dispose());
+                LogException(() => onConnectionReadyAgain?.Invoke(ArticleBodyResult.NotRetrieved));
+                throw;
+            }
+            catch (Exception e) when (e.IsFileDescriptorExhaustion())
+            {
+                circuitBreaker.RecordCancellation(breakerGeneration);
+                Log.Error(e,
+                    "File-descriptor exhaustion while connecting to provider {Provider}; suppressing retries.",
+                    providerName);
                 LogException(() => onConnectionReadyAgain?.Invoke(ArticleBodyResult.NotRetrieved));
                 throw;
             }
             catch (Exception e)
             {
-                circuitBreaker.RecordFailure();
+                circuitBreaker.RecordFailure(breakerGeneration);
                 LogException(() => connectionLock?.Replace());
                 LogException(() => connectionLock?.Dispose());
                 if (retryCount > 0)
@@ -288,19 +324,32 @@ public class MultiConnectionNntpClient(
             }
             catch (Exception e) when (e.IsCancellationException())
             {
+                circuitBreaker.RecordCancellation(breakerGeneration);
                 LogException(() => connectionLock?.Dispose());
                 LogException(() => onConnectionReadyAgain?.Invoke(ArticleBodyResult.NotRetrieved));
                 throw;
             }
             catch (Exception e) when (e.TryGetCausingException(out UsenetArticleNotFoundException _))
             {
+                circuitBreaker.RecordSuccess(breakerGeneration);
                 LogException(() => connectionLock?.Dispose());
+                LogException(() => onConnectionReadyAgain?.Invoke(ArticleBodyResult.NotRetrieved));
+                throw;
+            }
+            catch (Exception e) when (e.IsFileDescriptorExhaustion())
+            {
+                circuitBreaker.RecordCancellation(breakerGeneration);
+                LogException(() => connectionLock?.Replace());
+                LogException(() => connectionLock?.Dispose());
+                Log.Error(e,
+                    "File-descriptor exhaustion while using provider {Provider}; suppressing retries.",
+                    providerName);
                 LogException(() => onConnectionReadyAgain?.Invoke(ArticleBodyResult.NotRetrieved));
                 throw;
             }
             catch (Exception e)
             {
-                circuitBreaker.RecordFailure();
+                circuitBreaker.RecordFailure(breakerGeneration);
                 LogException(() => connectionLock?.Replace());
                 LogException(() => connectionLock?.Dispose());
                 if (retryCount > 0)
@@ -315,7 +364,7 @@ public class MultiConnectionNntpClient(
                 throw;
             }
 
-            circuitBreaker.RecordSuccess();
+            circuitBreaker.RecordSuccess(breakerGeneration);
 
             // stat, head, and date
             if (name is "STAT" or "HEAD" or "DATE")

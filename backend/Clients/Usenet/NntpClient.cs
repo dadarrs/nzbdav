@@ -130,23 +130,54 @@ public abstract class NntpClient : INntpClient
         CancellationToken cancellationToken
     )
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(concurrency, 1);
         using var childCt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = childCt.Token;
-
-        var tasks = segmentIds
-            .Select(async segmentId => (
-                SegmentId: segmentId,
-                Result: await StatAsync(segmentId, token).ConfigureAwait(false)
-            ))
-            .WithConcurrencyAsync(concurrency);
-
         var processed = 0;
-        await foreach (var task in tasks.ConfigureAwait(false))
+        var running = new HashSet<Task<(string SegmentId, UsenetStatResponse Result)>>();
+        using var segments = segmentIds.GetEnumerator();
+
+        void FillPipeline()
         {
-            progress?.Report(++processed);
-            if (task.Result.ResponseType == UsenetResponseType.ArticleExists) continue;
+            while (running.Count < concurrency && segments.MoveNext())
+                running.Add(CheckSegmentAsync(segments.Current));
+        }
+
+        async Task<(string SegmentId, UsenetStatResponse Result)> CheckSegmentAsync(string segmentId)
+        {
+            var result = await StatAsync(segmentId, token).ConfigureAwait(false);
+            return (segmentId, result);
+        }
+
+        try
+        {
+            FillPipeline();
+            while (running.Count > 0)
+            {
+                var completed = await Task.WhenAny(running).ConfigureAwait(false);
+                running.Remove(completed);
+                var task = await completed.ConfigureAwait(false);
+
+                progress?.Report(++processed);
+                if (task.Result.ResponseType != UsenetResponseType.ArticleExists)
+                    throw new UsenetArticleNotFoundException(task.SegmentId);
+
+                FillPipeline();
+            }
+        }
+        catch
+        {
             await childCt.CancelAsync().ConfigureAwait(false);
-            throw new UsenetArticleNotFoundException(task.SegmentId);
+            try
+            {
+                await Task.WhenAll(running).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Preserve the first failure after observing all cancelled siblings.
+            }
+
+            throw;
         }
     }
 }
