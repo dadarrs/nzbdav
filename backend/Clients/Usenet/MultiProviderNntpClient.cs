@@ -89,6 +89,13 @@ public class MultiProviderNntpClient(
             {
                 subResults = await provider.StatPipelinedAsync(subBatch, cancellationToken).ConfigureAwait(false);
             }
+            catch (ProviderCircuitOpenException)
+            {
+                // Provider selection is a snapshot. Another concurrent batch can trip this
+                // provider after the list was built, so treat the breaker rejection as a skip.
+                // It is not a new provider failure and must not replace the real last exception.
+                continue;
+            }
             catch (Exception e) when (e.IsFileDescriptorExhaustion())
             {
                 // This is a local process/host resource failure, not a provider failure.
@@ -306,6 +313,12 @@ public class MultiProviderNntpClient(
                 }
 
                 return WrapCounting(result, provider.Name);
+            }
+            catch (ProviderCircuitOpenException)
+            {
+                // The breaker can trip after GetOrderedProviders took its snapshot. Skip the
+                // stale entry without reporting or surfacing the breaker as an operation error.
+                continue;
             }
             catch (Exception e) when (e.IsFileDescriptorExhaustion())
             {
