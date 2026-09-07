@@ -18,6 +18,8 @@ public class GetReadSessionsController(ConfigManager configManager) : BaseApiCon
         var pageSize = int.TryParse(HttpContext.Request.Query["pageSize"], out var s)
             ? Math.Clamp(s, 1, MaxPageSize)
             : DefaultPageSize;
+        var search = HttpContext.Request.Query["search"].ToString().Trim();
+        var ct = HttpContext.RequestAborted;
 
         // "Clear history" hides entries behind a watermark rather than deleting them,
         // so dashboard statistics computed from ReadSessions stay intact.
@@ -25,10 +27,20 @@ public class GetReadSessionsController(ConfigManager configManager) : BaseApiCon
 
         await using var metrics = new MetricsDbContext();
         var query = metrics.ReadSessions
-            .Where(x => x.EndedAt > clearedBefore)
-            .OrderByDescending(x => x.EndedAt);
-        var totalCount = await query.CountAsync().ConfigureAwait(false);
+            .AsNoTracking()
+            .Where(x => x.EndedAt > clearedBefore);
+        if (search.Length > 0)
+        {
+            // Match literal substrings, including filenames containing LIKE wildcards.
+            var pattern = "%" + search.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+            query = query.Where(x => EF.Functions.Like(x.Path, pattern, "\\"));
+        }
+
+        var totalCount = await query.CountAsync(ct).ConfigureAwait(false);
+        page = Math.Min(page, Math.Max(1, (int)Math.Ceiling((double)totalCount / pageSize)));
         var sessions = await query
+            .OrderByDescending(x => x.EndedAt)
+            .ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new GetReadSessionsResponse.ReadSessionItem
@@ -45,7 +57,7 @@ public class GetReadSessionsController(ConfigManager configManager) : BaseApiCon
                 ClientUserAgent = x.ClientUserAgent,
                 EndReason = (int)x.EndReason,
             })
-            .ToListAsync().ConfigureAwait(false);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         return new GetReadSessionsResponse
         {

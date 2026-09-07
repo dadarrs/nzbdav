@@ -38,31 +38,59 @@ const END_REASONS: Record<number, { label: string, style: string }> = {
 
 export function StreamHistory() {
     const [page, setPage] = useState(1);
+    const [searchInput, setSearchInput] = useState("");
+    const [search, setSearch] = useState("");
+    const [refresh, setRefresh] = useState(0);
     const [data, setData] = useState<ReadSessionsResponse | null>(null);
+    const [error, setError] = useState(false);
     const [isConfirmingClear, setIsConfirmingClear] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
 
-    const fetchPage = useCallback(async (pageToLoad: number) => {
-        try {
-            const response = await fetch(`/api/get-read-sessions?page=${pageToLoad}&pageSize=${PAGE_SIZE}`);
-            if (!response.ok) return;
-            const body: ReadSessionsResponse = await response.json();
-            if (body.status) setData(body);
-        } catch {
-            // transient fetch errors just leave the previous page on screen
-        }
-    }, []);
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            const next = searchInput.trim();
+            if (next !== search) {
+                setPage(1);
+                setSearch(next);
+            }
+        }, 250);
+        return () => clearTimeout(timer);
+    }, [searchInput, search]);
 
     useEffect(() => {
-        fetchPage(page);
+        let controller: AbortController | undefined;
+        const fetchPage = async () => {
+            controller?.abort();
+            const request = new AbortController();
+            controller = request;
+            try {
+                const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+                if (search) params.set("search", search);
+                const response = await fetch(`/api/get-read-sessions?${params}`, { signal: request.signal });
+                if (!response.ok) throw new Error("Unable to load history");
+                const body: ReadSessionsResponse = await response.json();
+                if (!body.status) throw new Error("Unable to load history");
+                if (request.signal.aborted) return;
+                setData(body);
+                setPage(body.page);
+                setError(false);
+            } catch {
+                if (!request.signal.aborted) setError(true);
+            }
+        };
+        setData(null);
+        setError(false);
+        void fetchPage();
         // new sessions only appear on page 1; refreshing deeper pages would
         // shift rows underneath the reader as new history arrives above.
-        if (page !== 1) return;
-        const timer = setInterval(() => {
-            if (document.visibilityState === "visible") fetchPage(1);
-        }, REFRESH_INTERVAL_MS);
-        return () => clearInterval(timer);
-    }, [page, fetchPage]);
+        const timer = page === 1 ? setInterval(() => {
+            if (document.visibilityState === "visible") void fetchPage();
+        }, REFRESH_INTERVAL_MS) : undefined;
+        return () => {
+            controller?.abort();
+            clearInterval(timer);
+        };
+    }, [page, search, refresh]);
 
     const onConfirmClear = useCallback(async () => {
         setIsConfirmingClear(false);
@@ -71,14 +99,14 @@ export function StreamHistory() {
             const response = await fetch("/api/clear-read-sessions", { method: "POST" });
             if (response.ok) {
                 setPage(1);
-                await fetchPage(1);
+                setRefresh(value => value + 1);
             }
         } catch {
             // leave current view on transient failure
         } finally {
             setIsClearing(false);
         }
-    }, [fetchPage]);
+    }, []);
 
     const totalPages = data ? Math.max(1, Math.ceil(data.totalCount / PAGE_SIZE)) : 1;
 
@@ -88,7 +116,7 @@ export function StreamHistory() {
                 <div>
                     <h3 className={styles.title}>Stream history</h3>
                     <div className={styles.sub}>
-                        {data ? `${data.totalCount} completed read${data.totalCount === 1 ? "" : "s"}` : "Loading…"}
+                        {data ? `${data.totalCount} ${search ? "matching" : "completed"} read${data.totalCount === 1 ? "" : "s"}` : error ? "History unavailable" : "Loading…"}
                     </div>
                 </div>
                 {data !== null && data.totalCount > 0 && (
@@ -103,10 +131,19 @@ export function StreamHistory() {
                 )}
             </div>
 
+            <input
+                type="search"
+                className={styles.searchInput}
+                aria-label="Search stream history by filename or path"
+                placeholder="Search history…"
+                value={searchInput}
+                onChange={event => setSearchInput(event.target.value)}
+            />
+
             <ConfirmModal
                 show={isConfirmingClear}
                 title="Clear stream history?"
-                message={`All ${data?.totalCount ?? 0} entries will be permanently removed from this list. `
+                message={"All stream history entries, including those outside the current search, will be permanently removed from this list. "
                     + "This cannot be undone. Dashboard statistics (bytes read, session counts, "
                     + "read time, All Time totals) are not affected."}
                 confirmText="Clear history"
@@ -115,8 +152,12 @@ export function StreamHistory() {
                 onCancel={() => setIsConfirmingClear(false)} />
 
             {data && data.sessions.length === 0 && (
-                <div className={styles.empty}>Nothing streamed yet.</div>
+                <div className={styles.empty}>{search ? "No streams match your search." : "Nothing streamed yet."}</div>
             )}
+
+            {error && <div className={styles.empty} role="status">
+                Could not refresh history. <button type="button" onClick={() => setRefresh(value => value + 1)}>Retry</button>
+            </div>}
 
             {data && data.sessions.length > 0 && (
                 <div className={styles.list}>
