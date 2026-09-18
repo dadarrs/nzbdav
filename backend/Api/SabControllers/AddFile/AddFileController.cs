@@ -1,12 +1,14 @@
 ﻿using System.Xml;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Api.SabControllers.GetQueue;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Database.Models;
 using NzbWebDAV.Database.Models.Metrics;
 using NzbWebDAV.Extensions;
+using NzbWebDAV.Exceptions;
 using NzbWebDAV.Queue;
 using NzbWebDAV.Utils;
 using NzbWebDAV.Websocket;
@@ -34,6 +36,11 @@ public class AddFileController(
 
         // write the file to the blob-store
         await using var stream = request.NzbFileStream;
+        if (await dbClient.Ctx.QueueItems.AnyAsync(
+                item => item.Category == request.Category && item.FileName == request.FileName,
+                request.CancellationToken).ConfigureAwait(false))
+            throw new DuplicateQueuedNzbException(request.FileName, request.Category);
+
         await BlobStore.WriteBlob(id, stream);
 
         // save the queue item to the database
@@ -82,11 +89,14 @@ public class AddFileController(
             await dbClient.Ctx.SaveChangesAsync(request.CancellationToken).ConfigureAwait(false);
             _ = DavDatabaseContext.RcloneVfsForget(["/nzbs"]);
         }
-        catch
+        catch (Exception e)
         {
             // in case of any errors writing to the database
             // delete the nzb file blob
             BlobStore.Delete(id);
+            // Another upload may have inserted the same NZB after our initial check.
+            if (e is DbUpdateException dbError && DuplicateQueuedNzbException.IsQueueDuplicate(dbError))
+                throw new DuplicateQueuedNzbException(request.FileName, request.Category, e);
             throw;
         }
 

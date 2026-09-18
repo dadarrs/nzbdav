@@ -12,6 +12,7 @@ import { PageSection } from "../page-section/page-section"
 import { Pagination } from "../pagination/pagination"
 import { DropdownOptions } from "~/routes/explore/dropdown-options/dropdown-options"
 import { ExportNzb, Remove } from "~/routes/explore/item-menu/item-menu"
+import { useRangeSelection } from "~/hooks/use-range-selection"
 
 export type HistoryTableProps = {
     historySlots: PresentationHistorySlot[],
@@ -29,6 +30,8 @@ export type HistoryTableProps = {
 export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, totalPages, isLive, onPageSelected, onIsSelectedChanged, onIsRemovingChanged, onRemoved, onRemovedAll }: HistoryTableProps) {
     const [isConfirmingRemoval, setIsConfirmingRemoval] = useState(false);
     const [selectAllAcrossPages, setSelectAllAcrossPages] = useState(false);
+    const { onRowSelectionChanged, resetAnchor } = useRangeSelection(
+        historySlots.map(x => x.nzo_id), pageNumber, onIsSelectedChanged);
     var selectedCount = historySlots.filter(x => !!x.isSelected).length;
     var headerCheckboxState: TriCheckboxState = selectedCount === 0 ? 'none' : selectedCount === historySlots.length ? 'all' : 'some';
 
@@ -41,8 +44,9 @@ export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, tota
     }, [allOnPageSelected]);
 
     const onSelectAll = useCallback((isSelected: boolean) => {
+        resetAnchor();
         onIsSelectedChanged(new Set<string>(historySlots.map(x => x.nzo_id)), isSelected);
-    }, [historySlots, onIsSelectedChanged]);
+    }, [historySlots, onIsSelectedChanged, resetAnchor]);
 
     const onRemove = useCallback(() => {
         setIsConfirmingRemoval(true);
@@ -149,7 +153,7 @@ export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, tota
                     <HistoryRow
                         key={slot.nzo_id}
                         slot={slot}
-                        onIsSelectedChanged={(id, isSelected) => onIsSelectedChanged(new Set<string>([id]), isSelected)}
+                        onIsSelectedChanged={onRowSelectionChanged}
                         onIsRemovingChanged={(id, isRemoving) => onIsRemovingChanged(new Set<string>([id]), isRemoving)}
                         onRemoved={(id) => onRemoved(new Set([id]))}
                     />
@@ -172,7 +176,7 @@ export function HistoryTable({ historySlots, totalHistoryCount, pageNumber, tota
 
 type HistoryRowProps = {
     slot: PresentationHistorySlot,
-    onIsSelectedChanged: (nzo_id: string, isSelected: boolean) => void,
+    onIsSelectedChanged: (nzo_id: string, isSelected: boolean, range: boolean) => void,
     onIsRemovingChanged: (nzo_id: string, isRemoving: boolean) => void,
     onRemoved: (nzo_id: string) => void
 }
@@ -223,7 +227,7 @@ export function HistoryRow({ slot, onIsSelectedChanged, onIsRemovingChanged, onR
                 error={slot.fail_message}
                 fileSizeBytes={slot.bytes}
                 actions={<Actions slot={slot} onRemove={onRemove} />}
-                onRowSelectionChanged={isSelected => onIsSelectedChanged(slot.nzo_id, isSelected)}
+                onRowSelectionChanged={(isSelected, range) => onIsSelectedChanged(slot.nzo_id, isSelected, range)}
                 onRowClick={() => setShowStats(x => !x)}
             />
             {showStats && <ImportStatsRow nzoId={slot.nzo_id} colSpan={6} failMessage={slot.fail_message} />}

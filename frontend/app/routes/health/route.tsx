@@ -162,11 +162,13 @@ export default function Health({ loaderData }: Route.ComponentProps) {
         setSelectedIds(new Set());
     }, []);
 
-    const onToggleSelect = useCallback((id: string, isSelected: boolean) => {
+    const onToggleSelect = useCallback((ids: Set<string>, isSelected: boolean) => {
         setSelectedIds(prev => {
             const next = new Set(prev);
-            if (isSelected) next.add(id);
-            else next.delete(id);
+            for (const id of ids) {
+                if (isSelected) next.add(id);
+                else next.delete(id);
+            }
             return next;
         });
     }, []);

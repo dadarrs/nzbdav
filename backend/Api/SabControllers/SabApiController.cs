@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using NzbWebDAV.Api.SabControllers.AddFile;
 using NzbWebDAV.Api.SabControllers.AddUrl;
 using NzbWebDAV.Api.SabControllers.GetCategories;
@@ -14,9 +15,11 @@ using NzbWebDAV.Api.SabControllers.RemoveFromQueue;
 using NzbWebDAV.Config;
 using NzbWebDAV.Database;
 using NzbWebDAV.Extensions;
+using NzbWebDAV.Exceptions;
 using NzbWebDAV.Queue;
 using NzbWebDAV.Utils;
 using NzbWebDAV.Websocket;
+using Serilog;
 
 namespace NzbWebDAV.Api.SabControllers;
 
@@ -54,12 +57,24 @@ public class SabApiController(
                 Error = e.Message
             });
         }
-        catch (Exception e)
+        catch (DuplicateQueuedNzbException e)
         {
-            return StatusCode(500, new SabBaseResponse()
+            return Conflict(new SabBaseResponse()
             {
                 Status = false,
                 Error = e.Message
+            });
+        }
+        catch (Exception e)
+        {
+            // Preserve the inner database exception in server logs, not in the API response.
+            Log.Error(e, "SAB API request failed");
+            return StatusCode(500, new SabBaseResponse()
+            {
+                Status = false,
+                Error = e is DbUpdateException
+                    ? "Could not save the change to the database. Check the server logs for details."
+                    : e.Message
             });
         }
     }

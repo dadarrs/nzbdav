@@ -1,11 +1,12 @@
 import { Form } from "react-bootstrap";
 import { useEffect, useRef, type ReactNode } from "react";
 import styles from "./tri-checkbox.module.css";
+import { isRangeSelection } from "~/utils/range-selection";
 
 export type TriCheckboxState = "all" | "some" | "none" | boolean
 export type TriCheckboxProps = {
     state: TriCheckboxState,
-    onChange?: (isChecked: boolean) => void,
+    onChange?: (isChecked: boolean, range: boolean) => void,
     children: ReactNode
 }
 
@@ -25,7 +26,7 @@ export function TriCheckbox({ state, onChange, children }: TriCheckboxProps) {
                 <Form.Check
                     ref={checkboxRef}
                     checked={state === "all" || state === true}
-                    onChange={(e) => onChange && onChange(e.target.checked)}
+                    onChange={(e) => onChange?.(e.target.checked, isRangeSelection(e.nativeEvent as MouseEvent))}
                 />
             </div>
             <div>

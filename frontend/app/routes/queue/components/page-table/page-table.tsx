@@ -56,7 +56,7 @@ export type PageRowProps = {
     error?: string,
     fileSizeBytes: number,
     actions: ReactNode,
-    onRowSelectionChanged: (isSelected: boolean) => void,
+    onRowSelectionChanged: (isSelected: boolean, range: boolean) => void,
     // when set, clicking the row (outside the checkbox/name and actions cells)
     // fires this -- used by history rows to toggle their import-stats details
     onRowClick?: () => void,

@@ -7,6 +7,8 @@ import { Truncate } from "~/routes/queue/components/truncate/truncate";
 import { StatusBadge } from "~/routes/queue/components/status-badge/status-badge";
 import { TriCheckbox, type TriCheckboxState } from "~/routes/queue/components/tri-checkbox/tri-checkbox";
 import { Pagination } from "~/routes/queue/components/pagination/pagination";
+import { useRangeSelection } from "~/hooks/use-range-selection";
+import { isRangeSelection } from "~/utils/range-selection";
 
 export type HealthTableProps = {
     isEnabled: boolean,
@@ -19,7 +21,7 @@ export type HealthTableProps = {
     onSearchInputChanged: (value: string) => void,
     isSearchActive: boolean,
     selectedIds: Set<string>,
-    onToggleSelect: (id: string, isSelected: boolean) => void,
+    onToggleSelect: (ids: Set<string>, isSelected: boolean) => void,
     onToggleSelectAll: (isSelected: boolean) => void,
     onCheckNow: (ids: string[]) => void,
     onCheckAll: () => void,
@@ -44,6 +46,8 @@ export function HealthTable({
     isTriggering,
 }: HealthTableProps) {
     const [isConfirmingCheckAll, setIsConfirmingCheckAll] = useState(false);
+    const { onRowSelectionChanged, resetAnchor } = useRangeSelection(
+        healthCheckItems.map(x => x.id), JSON.stringify([pageNumber, searchInput]), onToggleSelect);
     const selectedOnPage = healthCheckItems.filter(x => selectedIds.has(x.id)).length;
     const headerCheckboxState: TriCheckboxState =
         selectedOnPage === 0 ? 'none'
@@ -121,7 +125,10 @@ export function HealthTable({
                                     <thead className={styles.desktop}>
                                         <tr>
                                             <th>
-                                                <TriCheckbox state={headerCheckboxState} onChange={onToggleSelectAll}>
+                                                <TriCheckbox state={headerCheckboxState} onChange={selected => {
+                                                    resetAnchor();
+                                                    onToggleSelectAll(selected);
+                                                }}>
                                                     Name
                                                 </TriCheckbox>
                                             </th>
@@ -139,7 +146,7 @@ export function HealthTable({
                                                         <div className={styles.rowCheckbox}>
                                                             <Form.Check
                                                                 checked={selectedIds.has(item.id)}
-                                                                onChange={e => onToggleSelect(item.id, e.target.checked)}
+                                                                onChange={e => onRowSelectionChanged(item.id, e.target.checked, isRangeSelection(e.nativeEvent as MouseEvent))}
                                                                 aria-label={`Select ${item.name}`}
                                                             />
                                                         </div>

@@ -11,6 +11,7 @@ import { SimpleDropdown } from "../simple-dropdown/simple-dropdown"
 import styles from "../../route.module.css"
 import { WideViewport } from "../wide-viewport/wide-viewport"
 import { ThinViewport } from "../thin-viewport/thin-viewport"
+import { useRangeSelection } from "~/hooks/use-range-selection"
 
 export type QueueTableProps = {
     queueSlots: PresentationQueueSlot[],
@@ -46,9 +47,8 @@ export function QueueTable({
     var headerCheckboxState: TriCheckboxState = selectedCount === 0 ? 'none' : selectedCount === queueSlots.length ? 'all' : 'some';
 
     // row events
-    const onRowIsSelectedChanged = useCallback((id: string, isSelected: boolean) => {
-        onIsSelectedChanged(new Set<string>([id]), isSelected);
-    }, [onIsSelectedChanged]);
+    const { onRowSelectionChanged: onRowIsSelectedChanged, resetAnchor } = useRangeSelection(
+        queueSlots.map(x => x.nzo_id), pageNumber, onIsSelectedChanged);
 
     const onRowIsRemovingChanged = useCallback((id: string, isRemoving: boolean) => {
         onIsRemovingChanged(new Set<string>([id]), isRemoving);
@@ -60,8 +60,9 @@ export function QueueTable({
 
     // table events
     const onSelectAll = useCallback((isSelected: boolean) => {
+        resetAnchor();
         onIsSelectedChanged(new Set<string>(queueSlots.map(x => x.nzo_id)), isSelected);
-    }, [queueSlots, onIsSelectedChanged]);
+    }, [queueSlots, onIsSelectedChanged, resetAnchor]);
 
     const onRemove = useCallback(() => {
         setIsConfirmingRemoval(true);
@@ -167,7 +168,7 @@ export function QueueTable({
 
 type QueueRowProps = {
     slot: PresentationQueueSlot
-    onIsSelectedChanged: (nzo_id: string, isSelected: boolean) => void,
+    onIsSelectedChanged: (nzo_id: string, isSelected: boolean, range: boolean) => void,
     onIsRemovingChanged: (nzo_id: string, isRemoving: boolean) => void,
     onRemoved: (nzo_id: string) => void
 }
@@ -225,7 +226,7 @@ export const QueueRow = memo(({ slot, onIsSelectedChanged, onIsRemovingChanged, 
                 percentage={slot.true_percentage}
                 fileSizeBytes={Number(slot.mb) * 1024 * 1024}
                 actions={<ActionButton type="delete" disabled={!!slot.isRemoving || isActivelyUploading} onClick={onRemove} />}
-                onRowSelectionChanged={isSelected => onIsSelectedChanged(slot.nzo_id, isSelected)}
+                onRowSelectionChanged={(isSelected, range) => onIsSelectedChanged(slot.nzo_id, isSelected, range)}
                 error={slot.error}
             />
             <ConfirmModal
