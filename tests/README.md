@@ -9,7 +9,10 @@ dotnet test tests/NzbWebDAV.Tests/NzbWebDAV.Tests.csproj
 The upload tests use a temporary SQLite database and synthetic NZBs. They do not
 connect to providers or run a queue worker. They cover duplicate API responses,
 concurrent duplicate insertion and blob cleanup, category scoping, and unrelated
-database errors.
+database errors. They also verify that optional backup failures return API success
+with the internal NZB retained, whereas required storage failures still reject the
+upload. Backup-specific tests cover warnings, missing configuration, preservation
+of existing backups, and cleanup after a simulated mid-copy I/O failure.
 
 With frontend dependencies installed:
 

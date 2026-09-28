@@ -47,19 +47,17 @@ public class AddFileController(
         QueueItem? queueItem;
         try
         {
-            // backup the nzb file if enabled
-            if (configManager.IsNzbBackupEnabled())
-            {
-                var backupLocation = configManager.GetNzbBackupLocation();
-                if (backupLocation != null)
-                {
-                    await BackupNzbAsync(id, request.FileName, request.Category, backupLocation);
-                }
-            }
-
             // compute the total segment bytes
             await using var nzbFileStream = BlobStore.ReadBlob(id);
             var totalSegmentBytes = ComputeTotalSegmentBytes(nzbFileStream);
+
+            // The internal blob is required; the additional backup is best-effort.
+            if (configManager.IsNzbBackupEnabled())
+            {
+                nzbFileStream.Position = 0;
+                await NzbBackupUtil.TryBackupAsync(nzbFileStream, request.FileName, request.Category,
+                    configManager.GetNzbBackupLocation()).ConfigureAwait(false);
+            }
 
             // create the queue item record
             queueItem = new QueueItem
@@ -143,39 +141,6 @@ public class AddFileController(
         catch (Exception e)
         {
             Log.Warning(e, "Failed to record import origin for {Id}", id);
-        }
-    }
-
-    private static async Task BackupNzbAsync(Guid id, string fileName, string category, string backupLocation)
-    {
-        try
-        {
-            if (!Directory.Exists(backupLocation))
-                Directory.CreateDirectory(backupLocation);
-
-            var destDir = Path.Combine(backupLocation, category);
-            if (!Directory.Exists(destDir))
-                Directory.CreateDirectory(destDir);
-
-            var baseName = Path.GetFileNameWithoutExtension(fileName);
-            var ext = Path.GetExtension(fileName);
-            if (string.IsNullOrEmpty(ext)) ext = ".nzb";
-
-            var destPath = Path.Combine(destDir, $"{baseName}{ext}");
-            var counter = 2;
-            while (System.IO.File.Exists(destPath))
-            {
-                destPath = Path.Combine(destDir, $"{baseName} ({counter}){ext}");
-                counter++;
-            }
-
-            await using var src = BlobStore.ReadBlob(id);
-            await using var dst = System.IO.File.Create(destPath);
-            await src.CopyToAsync(dst);
-        }
-        catch (Exception e)
-        {
-            throw new Exception($"Could not save nzb to `{backupLocation}`", e);
         }
     }
 

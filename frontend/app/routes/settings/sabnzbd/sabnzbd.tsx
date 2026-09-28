@@ -317,6 +317,7 @@ export function SabnzbdSettings({ config, setNewConfig, appVersion }: SabnzbdSet
                 <Form.Text id="nzb-backup-location-help" muted>
                     When enabled, a copy of each incoming NZB will be saved to this directory, organized by category.
                     The directory will be created if it doesn't already exist.
+                    {' '}Backup failures are logged as warnings and do not prevent imports.
                 </Form.Text>
             </Form.Group>
         </div>
